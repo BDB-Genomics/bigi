@@ -1,0 +1,31 @@
+# Synthetic Test Pipeline Snakefile
+
+rule raw_data:
+    output:
+        "data/raw.csv"
+    shell:
+        "mkdir -p data && echo 'sample,gene,expression' > data/raw.csv"
+
+rule preprocess:
+    input:
+        "data/raw.csv"
+    output:
+        "data/filtered.csv"
+    shell:
+        "Rscript scripts/preprocess.R data/raw.csv data/filtered.csv"
+
+rule normalise:
+    input:
+        "data/filtered.csv"
+    output:
+        "data/normalized.csv"
+    script:
+        "scripts/normalize.R"
+
+rule plot_data:
+    input:
+        "data/normalized.csv"
+    output:
+        "plots/expression_plot.png"
+    script:
+        "scripts/plot.R"

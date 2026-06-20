@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# BiGI generated files
+.bigi_index.json
+test_pipeline/data/
+test_pipeline/plots/
+
+# HTML exports (generated artifacts)
+visualization.html
+**/visualization.html
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Node.js
+node_modules/
+package-lock.json

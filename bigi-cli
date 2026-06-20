@@ -1,0 +1,10 @@
+#!/usr/bin/env python3
+"""Convenience entry point for running BiGI directly from the source tree.
+
+For installed usage, prefer the 'bigi' console_scripts entry point defined
+in pyproject.toml, which is available after 'pip install -e .'.
+"""
+from bigi.cli import main
+
+if __name__ == "__main__":
+    main()

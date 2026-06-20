@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=61.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bigi"
+version = "0.1.0"
+description = "BiGI: BDB-Genomics Impact Graph — trace downstream impact across Snakemake pipelines and R code."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
+
+[project.scripts]
+bigi = "bigi.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["bigi*"]

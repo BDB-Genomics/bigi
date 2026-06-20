@@ -1,0 +1,2319 @@
+HTML_TEMPLATE = r"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BiGI - Impact Graph Visualization</title>
+    <!-- Google Fonts & Mermaid.js -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.2.4/dist/mermaid.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #060913;
+            --panel-bg: rgba(10, 15, 30, 0.6);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
+            --accent-rule: #6366f1; /* Indigo */
+            --accent-func: #10b981; /* Emerald */
+            --accent-unres: #f43f5e; /* Rose */
+            --accent-glow: rgba(99, 102, 241, 0.15);
+            --panel-blur: blur(20px);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: radial-gradient(circle at 50% 50%, #080d1a 0%, #03050a 100%);
+            color: var(--text-main);
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+        }
+
+        #canvas-container {
+            flex-grow: 1;
+            height: 100%;
+            position: relative;
+            cursor: grab;
+        }
+
+        #canvas-container:active {
+            cursor: grabbing;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* UI Panels */
+        .panel {
+            position: absolute;
+            background: rgba(8, 12, 24, 0.75);
+            backdrop-filter: blur(25px);
+            -webkit-backdrop-filter: blur(25px);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 20px 50px -10px rgba(0, 0, 0, 0.8), inset 0 1px 1px rgba(255, 255, 255, 0.05);
+            z-index: 10;
+            max-height: 90vh;
+            overflow-y: auto;
+            transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.4s, border-color 0.3s;
+        }
+
+        .panel::-webkit-scrollbar {
+            width: 6px;
+        }
+        .panel::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .panel::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+
+        #left-panel {
+            top: 20px;
+            left: 20px;
+            width: 320px;
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+
+        #left-panel.collapsed {
+            transform: translateX(-350px);
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        #right-panel {
+            top: 20px;
+            right: 20px;
+            width: 350px;
+            transform: translateX(380px);
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        #right-panel.active {
+            transform: translateX(0);
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        /* Floating panel toggle buttons */
+        .fab-btn {
+            position: absolute;
+            top: 30px;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: rgba(17, 24, 39, 0.85);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 11;
+            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+            font-size: 0.85rem;
+        }
+
+        .fab-btn:hover {
+            background: #1f2937;
+            border-color: rgba(255, 255, 255, 0.2);
+            transform: scale(1.05);
+        }
+
+        #toggle-left {
+            left: 360px;
+        }
+
+        #toggle-left.collapsed {
+            left: 20px;
+        }
+
+        .panel-close-btn {
+            float: right;
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            font-size: 1.2rem;
+            cursor: pointer;
+            transition: color 0.2s;
+            line-height: 1;
+        }
+
+        .panel-close-btn:hover {
+            color: var(--text-main);
+        }
+
+        h2 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.15rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            margin-bottom: 5px;
+            color: #ffffff;
+            display: inline-block;
+        }
+
+        .subtitle {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            margin-top: -3px;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        /* Search input */
+        .search-box {
+            position: relative;
+            width: 100%;
+        }
+
+        .search-box input {
+            width: 100%;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 10px 14px;
+            color: var(--text-main);
+            font-size: 0.85rem;
+            outline: none;
+            transition: all 0.2s;
+        }
+
+        .search-box input:focus {
+            border-color: var(--accent-rule);
+            background: rgba(0, 0, 0, 0.5);
+            box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+        }
+
+        /* Legend */
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 0.8rem;
+            margin-bottom: 10px;
+        }
+
+        .legend-color {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        .color-rule { background-color: var(--accent-rule); box-shadow: 0 0 8px var(--accent-rule); }
+        .color-func { background-color: var(--accent-func); box-shadow: 0 0 8px var(--accent-func); }
+        .color-unres { background-color: var(--accent-unres); box-shadow: 0 0 8px var(--accent-unres); }
+
+        /* Node List */
+        .node-list-container {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            max-height: 220px;
+            overflow-y: auto;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 8px;
+            background: rgba(0, 0, 0, 0.25);
+        }
+
+        .node-item {
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.2s;
+            border: 1px solid transparent;
+        }
+
+        .node-item:hover {
+            background: rgba(255, 255, 255, 0.04);
+            border-color: rgba(255, 255, 255, 0.05);
+        }
+
+        .badge {
+            font-size: 0.6rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+        }
+
+        .badge-rule { background: rgba(99, 102, 241, 0.15); color: #818cf8; border: 1px solid rgba(99, 102, 241, 0.2); }
+        .badge-func { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.2); }
+        .badge-unres { background: rgba(244, 63, 94, 0.15); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.2); }
+
+        /* Details Panel Content */
+        .detail-header {
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 16px;
+            margin-bottom: 16px;
+        }
+
+        .detail-title {
+            font-size: 1.05rem;
+            font-weight: 700;
+            word-break: break-all;
+            color: #ffffff;
+        }
+
+        .detail-meta {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            margin-top: 5px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .section-title {
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            margin-top: 20px;
+            margin-bottom: 10px;
+        }
+
+        .detail-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            font-size: 0.78rem;
+        }
+
+        .detail-list li {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border-color);
+            padding: 10px 14px;
+            border-radius: 8px;
+            word-break: break-all;
+        }
+
+        .code-container {
+            background: #090d16 !important;
+            border: 1px solid rgba(255, 255, 255, 0.08) !important;
+            border-radius: 6px;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 0.72rem;
+            color: #a7f3d0;
+            overflow-x: auto;
+            max-height: 250px;
+            margin-top: 10px;
+            white-space: pre;
+            line-height: 1.4;
+        }
+
+        /* Tabbed navigation styling */
+        .tabs {
+            display: flex;
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 16px;
+            gap: 4px;
+        }
+        .tab-btn {
+            padding: 8px 12px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s ease;
+            user-select: none;
+        }
+        .tab-btn:hover {
+            color: var(--text-main);
+        }
+        .tab-btn.active {
+            color: #818cf8;
+            border-bottom-color: #818cf8;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+
+        .detail-edge-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .btn {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            padding: 8px 14px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: all 0.2s;
+        }
+
+        .btn:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 255, 255, 0.15);
+        }
+
+        #controls {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            display: flex;
+            gap: 10px;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+    <div id="canvas-container">
+        <canvas id="graphCanvas"></canvas>
+    </div>
+
+    <!-- Controls -->
+    <div id="controls">
+        <button class="btn" id="btn-pause">Pause Physics</button>
+        <button class="btn" id="btn-reset">Reset Layout</button>
+        <button class="btn" id="btn-layout">Layout: Swimlanes</button>
+        <button class="btn" id="btn-export">Export PNG</button>
+    </div>
+
+    <!-- Minimap overlay -->
+    <div id="minimap-container" style="position: absolute; bottom: 20px; right: 20px; width: 150px; height: 100px; background: rgba(10, 15, 30, 0.75); border: 1px solid var(--border-color); border-radius: 8px; backdrop-filter: blur(10px); z-index: 10; overflow: hidden; pointer-events: none;">
+        <canvas id="minimapCanvas" style="width: 100%; height: 100%; display: block;"></canvas>
+    </div>
+
+    <!-- Toggle Left Panel button -->
+    <button id="toggle-left" class="fab-btn">◀</button>
+
+    <!-- Left Panel: Legend & Search & Info -->
+    <div class="panel" id="left-panel">
+        <div>
+            <button class="panel-close-btn" id="close-left-btn">×</button>
+            <h2 style="display: flex; align-items: center; gap: 8px; font-size: 1.1rem; letter-spacing: -0.01em;">
+                <span style="font-size: 1.25rem;">🧬</span> BiGI Impact Graph
+            </h2>
+            <div class="subtitle" style="font-size: 0.65rem; color: #6366f1; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 3px;">Cross-Layer Genomic Index</div>
+        </div>
+
+        <div class="search-box">
+            <input type="text" id="search-input" placeholder="Search rules or functions...">
+        </div>
+
+        <div>
+            <div class="section-title">Modalities</div>
+            <div class="legend-item">
+                <div class="legend-color color-rule"></div>
+                <span>Pipeline Rule</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color color-func"></div>
+                <span>R Function Definition</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color color-unres"></div>
+                <span>External / Unresolved</span>
+            </div>
+        </div>
+
+        <div>
+            <div class="section-title">Filters</div>
+            <div class="legend-item">
+                <input type="checkbox" id="hide-unresolved-cb" checked style="margin-right: 8px; cursor: pointer;">
+                <label for="hide-unresolved-cb" style="cursor: pointer; font-size: 0.8rem; user-select: none;">Hide Unresolved Links</label>
+            </div>
+            <div class="legend-item" style="margin-top: 8px;">
+                <input type="checkbox" id="focus-mode-cb" style="margin-right: 8px; cursor: pointer;">
+                <label for="focus-mode-cb" style="cursor: pointer; font-size: 0.8rem; user-select: none; color: #818cf8; font-weight: 500; display: flex; align-items: center; gap: 4px;">🎯 Focus Mode (Selected thread)</label>
+            </div>
+            <div class="legend-item" id="git-filter-container" style="display: none; margin-top: 8px;">
+                <input type="checkbox" id="git-impact-cb" style="margin-right: 8px; cursor: pointer;">
+                <label for="git-impact-cb" style="cursor: pointer; font-size: 0.8rem; user-select: none; color: #fdba74; display: flex; align-items: center; gap: 4px; font-weight: 500;">🍊 Git Changes Impact</label>
+            </div>
+        </div>
+
+        <div>
+            <div class="section-title">Index Nodes</div>
+            <div class="node-list-container" id="node-list">
+                <!-- Populated by JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Panel: Node details Inspector -->
+    <div class="panel" id="right-panel">
+        <button class="panel-close-btn" id="close-right-btn">×</button>
+        <div id="detail-content">
+            <!-- Populated by JS -->
+        </div>
+    </div>
+
+    <script>
+        // Inject data here from Python
+        const graphData = // __DATA__;
+
+        const canvas = document.getElementById("graphCanvas");
+        const ctx = canvas.getContext("2d");
+        const container = document.getElementById("canvas-container");
+
+        let width = canvas.width = container.clientWidth;
+        let height = canvas.height = container.clientHeight;
+
+        window.addEventListener("resize", () => {
+            width = canvas.width = container.clientWidth;
+            height = canvas.height = container.clientHeight;
+        });
+
+        const rawNodes = graphData.nodes;
+        const rawEdges = graphData.edges;
+
+        const nodes = [];
+        const nodeIdMap = {};
+
+        // Convert dict nodes to array with layout properties
+        // Pre-measure text widths to scale bounding box capsules
+        Object.entries(rawNodes).forEach(([id, n]) => {
+            // Measure text width using a temp estimation or standard canvas rules
+            // (We will measure dynamically in canvas after font load, but initialize here)
+            const nameLen = n.name.length;
+            const w = Math.max(nameLen * 6.2 + 20, 60);
+            const h = 20;
+            const defaultRad = w / 2; // collision radius is half-width
+            const node = {
+                id: id,
+                name: n.name,
+                type: n.type,
+                file: n.file,
+                inputs: n.inputs || [],
+                outputs: n.outputs || [],
+                line_range: n.line_range || [],
+                x: width / 2 + (Math.random() - 0.5) * 400,
+                y: height / 2 + (Math.random() - 0.5) * 400,
+                vx: 0,
+                vy: 0,
+                width: w,
+                height: h,
+                baseWidth: w,
+                baseHeight: h,
+                targetWidth: w,
+                targetHeight: h,
+                radius: defaultRad,
+                baseRadius: defaultRad,
+                targetRadius: defaultRad,
+                code: n.code || "",
+                git_modified: n.git_modified || false
+            };
+            nodes.push(node);
+            nodeIdMap[id] = node;
+        });
+
+        function initNodeSizes() {
+            ctx.font = "9px sans-serif";
+            nodes.forEach(n => {
+                const textWidth = ctx.measureText(n.name).width;
+                const w = Math.max(textWidth + 24, 70);
+                n.width = w;
+                n.baseWidth = w;
+                n.targetWidth = w;
+                n.radius = w / 2;
+                n.baseRadius = w / 2;
+                n.targetRadius = w / 2;
+            });
+        }
+        initNodeSizes();
+        if (document.fonts) {
+            document.fonts.ready.then(() => {
+                initNodeSizes();
+            });
+        }
+
+        // Convert edges
+        const links = rawEdges.map(e => ({
+            source: e.source,
+            target: e.target,
+            confidence: e.confidence,
+            type: e.type,
+            label: e.label,
+            detail: e.detail
+        })).filter(l => nodeIdMap[l.source] && nodeIdMap[l.target]);
+
+        // State variables
+        let selectedNode = null;
+        let selectedNodeActivePaths = new Set();
+        let selectedNodeActiveLinks = new Set();
+        let collapsedGroups = new Set();
+        let hoveredNode = null;
+        let isSimulating = true;
+        let transform = { x: 0, y: 0, k: 1 };
+        let isDraggingCanvas = false;
+        let dragStart = { x: 0, y: 0 };
+        let draggedNode = null;
+        let mouseSim = { x: null, y: null };
+        let layoutMode = 'swimlane'; // 'swimlane' or 'free'
+
+        // Git Changes Impact Tracker State
+        let gitRiskScores = {}; // Map of node.id -> shortest path distance from modified node (0 is modified, 1 is direct downstream, etc.)
+        let gitImpactNodes = new Set();
+        let hasGitChanges = false;
+        let gitImpactOnly = false;
+
+        function calculateGitImpact() {
+            const modifiedIds = [];
+            nodes.forEach(n => {
+                if (n.git_modified) {
+                    modifiedIds.push(n.id);
+                    hasGitChanges = true;
+                }
+            });
+
+            if (hasGitChanges) {
+                document.getElementById("git-filter-container").style.display = "flex";
+            }
+
+            const adj = {};
+            links.forEach(l => {
+                adj[l.source] = adj[l.source] || [];
+                adj[l.source].push(l.target);
+            });
+
+            gitRiskScores = {};
+            const queue = [];
+            modifiedIds.forEach(id => {
+                gitRiskScores[id] = 0;
+                queue.push(id);
+            });
+
+            while (queue.length > 0) {
+                const curr = queue.shift();
+                const currDist = gitRiskScores[curr];
+                const children = adj[curr] || [];
+                children.forEach(child => {
+                    if (!(child in gitRiskScores)) {
+                        gitRiskScores[child] = currDist + 1;
+                        queue.push(child);
+                    }
+                });
+            }
+            gitImpactNodes = new Set(Object.keys(gitRiskScores));
+        }
+        calculateGitImpact();
+
+        function computeActivePaths(node) {
+            selectedNodeActivePaths.clear();
+            selectedNodeActiveLinks.clear();
+            if (!node) return;
+            
+            selectedNodeActivePaths.add(node.id);
+            let queue = [node.id];
+            while (queue.length > 0) {
+                let curr = queue.shift();
+                links.forEach(l => {
+                    if (l.target === curr && !selectedNodeActivePaths.has(l.source)) {
+                        selectedNodeActivePaths.add(l.source);
+                        selectedNodeActiveLinks.add(l);
+                        queue.push(l.source);
+                    }
+                });
+            }
+            queue = [node.id];
+            while (queue.length > 0) {
+                let curr = queue.shift();
+                links.forEach(l => {
+                    if (l.source === curr && !selectedNodeActivePaths.has(l.target)) {
+                        selectedNodeActivePaths.add(l.target);
+                        selectedNodeActiveLinks.add(l);
+                        queue.push(l.target);
+                    }
+                });
+            }
+        }
+
+        // Calculate degree centrality for visual sizing and analysis
+        function calculateCentrality() {
+            nodes.forEach(n => {
+                n.inDegree = 0;
+                n.outDegree = 0;
+            });
+            links.forEach(l => {
+                if (nodeIdMap[l.source]) nodeIdMap[l.source].outDegree++;
+                if (nodeIdMap[l.target]) nodeIdMap[l.target].inDegree++;
+            });
+            nodes.forEach(n => {
+                n.centrality = n.inDegree + n.outDegree;
+            });
+            const maxCent = Math.max(...nodes.map(n => n.centrality), 1);
+            nodes.forEach(n => {
+                n.centralityScore = n.centrality / maxCent;
+            });
+        }
+        calculateCentrality();
+
+
+
+        // Tab Switching Logic
+        let activeTabId = "overview";
+        function switchTab(tabId) {
+            activeTabId = tabId;
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            
+            const btn = document.getElementById(`tab-btn-${tabId}`);
+            if (btn) btn.classList.add('active');
+            
+            const content = document.getElementById(`tab-content-${tabId}`);
+            if (content) content.classList.add('active');
+        }
+
+        // Generate Mermaid.js code for transitive sub-graph
+        function generateMermaidCode(node, activePaths) {
+            let mStr = "graph TD\n";
+            mStr += "  classDef rule fill:#6366f1,stroke:#a5b4fc,color:#fff,rx:6px,ry:6px;\n";
+            mStr += "  classDef func fill:#10b981,stroke:#34d399,color:#fff,rx:6px,ry:6px;\n";
+            mStr += "  classDef unres fill:#f43f5e,stroke:#fda4af,color:#fff,stroke-dasharray:3 3,rx:6px,ry:6px;\n\n";
+
+            const pathNodeIds = activePaths && activePaths.size > 0 ? activePaths : new Set([node.id]);
+            
+            nodes.forEach(n => {
+                if (pathNodeIds.has(n.id)) {
+                    const cleanId = n.id.replace(/[^a-zA-Z0-9_]/g, "_");
+                    mStr += `  ${cleanId}["${n.name}"]:::${n.type === 'rule' ? 'rule' : n.type === 'unresolved' ? 'unres' : 'func'}\n`;
+                }
+            });
+
+            links.forEach(l => {
+                if (pathNodeIds.has(l.source) && pathNodeIds.has(l.target)) {
+                    const cleanSrc = l.source.replace(/[^a-zA-Z0-9_]/g, "_");
+                    const cleanTgt = l.target.replace(/[^a-zA-Z0-9_]/g, "_");
+                    if (l.label) {
+                        mStr += `  ${cleanSrc} -->|"${l.label}"| ${cleanTgt}\n`;
+                    } else {
+                        mStr += `  ${cleanSrc} --> ${cleanTgt}\n`;
+                    }
+                }
+            });
+            return mStr;
+        }
+
+        // Clipboard utility for Mermaid copy action
+        function copyMermaidToClipboard() {
+            const codeEl = document.getElementById("mermaid-code-block");
+            if (!codeEl) return;
+            navigator.clipboard.writeText(codeEl.textContent).then(() => {
+                const copyBtn = document.getElementById("mermaid-copy-btn");
+                if (copyBtn) {
+                    copyBtn.textContent = "📋 Copied!";
+                    setTimeout(() => { copyBtn.textContent = "📋 Copy Code"; }, 2000);
+                }
+            }).catch(err => {
+                console.error("Failed to copy text: ", err);
+            });
+        }
+
+        // Advanced search matching
+        function nodeMatchesSearch(n) {
+            const search = document.getElementById("search-input").value.trim().toLowerCase();
+            if (!search) return true;
+            
+            let searchType = null;
+            let searchFile = null;
+            let plainSearch = search;
+            
+            if (search.includes("type:")) {
+                const match = search.match(/type:(\w+)/);
+                if (match) {
+                    searchType = match[1];
+                    plainSearch = plainSearch.replace(/type:\w+/, "").trim();
+                }
+            }
+            if (search.includes("file:")) {
+                const match = search.match(/file:([^\s]+)/);
+                if (match) {
+                    searchFile = match[1].toLowerCase();
+                    plainSearch = plainSearch.replace(/file:[^\s]+/, "").trim();
+                }
+            }
+            
+            if (searchType && n.type !== searchType) return false;
+            if (searchFile && (!n.file || !n.file.toLowerCase().includes(searchFile))) return false;
+            if (plainSearch) {
+                const matchesName = n.name.toLowerCase().includes(plainSearch);
+                const matchesFile = n.file && n.file.toLowerCase().includes(plainSearch);
+                if (!matchesName && !matchesFile) return false;
+            }
+            return true;
+        }
+
+        // Collapsible sidebar elements
+        const leftPanel = document.getElementById("left-panel");
+        const rightPanel = document.getElementById("right-panel");
+        const toggleLeftBtn = document.getElementById("toggle-left");
+        const closeLeftBtn = document.getElementById("close-left-btn");
+        const closeRightBtn = document.getElementById("close-right-btn");
+
+        function setLeftPanelCollapsed(collapsed) {
+            if (collapsed) {
+                leftPanel.classList.add("collapsed");
+                toggleLeftBtn.classList.add("collapsed");
+                toggleLeftBtn.textContent = "▶";
+            } else {
+                leftPanel.classList.remove("collapsed");
+                toggleLeftBtn.classList.remove("collapsed");
+                toggleLeftBtn.textContent = "◀";
+            }
+        }
+
+        toggleLeftBtn.onclick = () => {
+            const isCollapsed = leftPanel.classList.contains("collapsed");
+            setLeftPanelCollapsed(!isCollapsed);
+        };
+        closeLeftBtn.onclick = () => setLeftPanelCollapsed(true);
+        
+        closeRightBtn.onclick = () => {
+            selectedNode = null;
+            rightPanel.classList.remove("active");
+        };
+
+        // Populate left panel node list
+        const nodeListEl = document.getElementById("node-list");
+        function populateNodeList(filterText = "") {
+            nodeListEl.innerHTML = "";
+            const hideUnresolved = document.getElementById("hide-unresolved-cb").checked;
+            const gitImpactCb = document.getElementById("git-impact-cb");
+            const gitImpactOnly = gitImpactCb ? gitImpactCb.checked : false;
+            const focusModeCb = document.getElementById("focus-mode-cb");
+            const isFocusModeActive = focusModeCb && focusModeCb.checked && selectedNode;
+            
+            const sortedNodes = [...nodes].sort((a, b) => {
+                if (a.type !== b.type) return a.type.localeCompare(b.type);
+                return a.name.localeCompare(b.name);
+            });
+
+            sortedNodes.forEach(n => {
+                if (hideUnresolved && n.type === 'unresolved') {
+                    return;
+                }
+                if (gitImpactOnly && !gitImpactNodes.has(n.id)) {
+                    return;
+                }
+                if (isFocusModeActive && !selectedNodeActivePaths.has(n.id)) {
+                    return;
+                }
+                if (!nodeMatchesSearch(n)) {
+                    return;
+                }
+                const div = document.createElement("div");
+                div.className = "node-item";
+                if (n.git_modified) {
+                    div.style.borderLeft = "3px solid #f97316";
+                    div.style.background = "rgba(249, 115, 22, 0.03)";
+                }
+                
+                let badgeClass = "badge-func";
+                let badgeText = "FUNC";
+                if (n.type === "rule") {
+                    badgeClass = "badge-rule";
+                    badgeText = "RULE";
+                } else if (n.type === "unresolved") {
+                    badgeClass = "badge-unres";
+                    badgeText = "UNRES";
+                }
+
+                div.innerHTML = `
+                    <span style="font-weight: 500; display:flex; align-items:center; gap:4px;">
+                        ${n.git_modified ? "📝 " : ""}${n.name}
+                    </span>
+                    <span class="badge ${badgeClass}">${badgeText}</span>
+                `;
+                div.onclick = () => selectNode(n);
+                nodeListEl.appendChild(div);
+            });
+        }
+        populateNodeList();
+
+        document.getElementById("search-input").addEventListener("input", (e) => {
+            populateNodeList(e.target.value);
+            draw();
+        });
+
+        document.getElementById("hide-unresolved-cb").addEventListener("change", () => {
+            populateNodeList(document.getElementById("search-input").value);
+            draw();
+        });
+
+        const focusModeCb = document.getElementById("focus-mode-cb");
+        if (focusModeCb) {
+            focusModeCb.addEventListener("change", () => {
+                populateNodeList(document.getElementById("search-input").value);
+                isSimulating = true; // wake physics
+                draw();
+            });
+        }
+
+        document.getElementById("git-impact-cb").addEventListener("change", (e) => {
+            gitImpactOnly = e.target.checked;
+            populateNodeList(document.getElementById("search-input").value);
+            draw();
+        });
+
+        // Pause / Play Physics
+        const pauseBtn = document.getElementById("btn-pause");
+        pauseBtn.onclick = () => {
+            isSimulating = !isSimulating;
+            pauseBtn.textContent = isSimulating ? "Pause Physics" : "Resume Physics";
+        };
+
+        // Reset positions
+        document.getElementById("btn-reset").onclick = () => {
+            nodes.forEach(n => {
+                n.x = width / 2 + (Math.random() - 0.5) * 400;
+                n.y = height / 2 + (Math.random() - 0.5) * 400;
+                n.vx = 0;
+                n.vy = 0;
+            });
+            transform = { x: 0, y: 0, k: 1 };
+            if (!isSimulating) {
+                isSimulating = true;
+                pauseBtn.textContent = "Pause Physics";
+            }
+        };
+
+        // Layout Mode toggle
+        const layoutBtn = document.getElementById("btn-layout");
+        layoutBtn.onclick = () => {
+            layoutMode = layoutMode === 'swimlane' ? 'free' : 'swimlane';
+            layoutBtn.textContent = layoutMode === 'swimlane' ? 'Layout: Swimlanes' : 'Layout: Free';
+            if (!isSimulating) {
+                isSimulating = true;
+                pauseBtn.textContent = "Pause Physics";
+            }
+        };
+
+        // Export PNG capture
+        document.getElementById("btn-export").onclick = () => {
+            const dataURL = canvas.toDataURL("image/png");
+            const link = document.createElement("a");
+            link.download = `bigi_impact_graph_${selectedNode ? selectedNode.name : 'export'}.png`;
+            link.href = dataURL;
+            link.click();
+        };
+
+        function escapeHtml(str) {
+            if (!str) return "";
+            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        }
+
+        function highlightCode(code) {
+            if (!code) return "";
+            let esc = escapeHtml(code);
+            
+            const placeholders = [];
+            
+            // 1. Temporarily extract block comments /* ... */
+            esc = esc.replace(/(\/\*[\s\S]*?\*\/)/g, (match) => {
+                const id = `__COMMENT_${placeholders.length}__`;
+                placeholders.push({ id: id, html: `<span style="color: #6b7280; font-style: italic;">${match}</span>` });
+                return id;
+            });
+
+            // 2. Temporarily extract single-line comments (# or //)
+            esc = esc.replace(/((?:#[^\n]*)|(?:\/\/[^\n]*))/g, (match) => {
+                const id = `__COMMENT_${placeholders.length}__`;
+                placeholders.push({ id: id, html: `<span style="color: #6b7280; font-style: italic;">${match}</span>` });
+                return id;
+            });
+            
+            // 3. Temporarily extract double-quoted strings
+            esc = esc.replace(/("(?:\\.|[^"\\])*")/g, (match) => {
+                const id = `__STRING_${placeholders.length}__`;
+                placeholders.push({ id: id, html: `<span style="color: #fb7185;">${match}</span>` });
+                return id;
+            });
+            
+            // 4. Temporarily extract single-quoted strings
+            esc = esc.replace(/('(?:\\.|[^'\\])*')/g, (match) => {
+                const id = `__STRING_${placeholders.length}__`;
+                placeholders.push({ id: id, html: `<span style="color: #fb7185;">${match}</span>` });
+                return id;
+            });
+
+            // 5. Highlight variables assignment / arrows
+            esc = esc.replace(/(&lt;-|=|=&gt;|-&gt;)/g, '<span style="color: #34d399;">$1</span>');
+
+            // 6. Highlight keywords
+            const keywords = /\b(function|if|else|for|while|return|library|require|in|next|break|def|func|fn|sub|const|let|var|class|import|export|from|as|package|struct|impl|use|using|end)\b/g;
+            esc = esc.replace(keywords, '<span style="color: #f472b6; font-weight: bold;">$1</span>');
+
+            // 7. Highlight function calls
+            esc = esc.replace(/\b([a-zA-Z0-9_\.\:]+)\s*(?=\()/g, '<span style="color: #60a5fa;">$1</span>');
+
+            // 8. Restore comments and strings (in reverse order to handle nesting)
+            for (let i = placeholders.length - 1; i >= 0; i--) {
+                esc = esc.replace(placeholders[i].id, placeholders[i].html);
+            }
+
+            return esc;
+        }
+
+        function renderMermaidFlowchart(node, mermaidCode) {
+            const element = document.getElementById("mermaid-rendered-flowchart");
+            if (!element) return;
+            if (!window.mermaid) {
+                element.innerHTML = `<div style="color: var(--accent-unres); font-size: 0.75rem; text-align: center; padding: 20px 0;">Mermaid library failed to load (offline or CDN blocked). Copy code below.</div>`;
+                return;
+            }
+            
+            try {
+                const chartId = "mermaid-chart-" + Math.floor(Math.random() * 1000000);
+                mermaid.render(chartId, mermaidCode).then(({ svg, bindFunctions }) => {
+                    element.innerHTML = svg;
+                    if (bindFunctions) bindFunctions(element);
+                    
+                    // Bind click handlers to nodes in the flowchart
+                    element.querySelectorAll(".node").forEach(nodeEl => {
+                        const idClass = Array.from(nodeEl.classList).find(c => c.startsWith("flowchart-") && !c.includes("-"));
+                        let targetId = null;
+                        if (idClass) {
+                            targetId = idClass.replace("flowchart-", "");
+                        } else {
+                            const idAttr = nodeEl.id;
+                            if (idAttr) {
+                                const match = idAttr.match(/^(?:flowchart-)?([a-zA-Z0-9_]+)-\d+$/);
+                                if (match) targetId = match[1];
+                            }
+                        }
+                        
+                        if (targetId) {
+                            nodeEl.style.cursor = "pointer";
+                            nodeEl.addEventListener("click", (evt) => {
+                                evt.stopPropagation();
+                                const origNode = nodes.find(n => n.id.replace(/[^a-zA-Z0-9_]/g, "_") === targetId);
+                                if (origNode) {
+                                    selectNodeById(origNode.id);
+                                }
+                            });
+                        }
+                    });
+                }).catch(err => {
+                    console.error("Mermaid Render Error: ", err);
+                    element.innerHTML = `<div style="color: var(--accent-unres); font-size: 0.75rem; text-align: center; padding: 20px 0;">Mermaid render error. Copy code below.</div>`;
+                });
+            } catch (e) {
+                console.error(e);
+                element.innerHTML = `<div style="color: var(--accent-unres); font-size: 0.75rem; text-align: center; padding: 20px 0;">Mermaid render initialization error.</div>`;
+            }
+        }
+
+        // Selection display updater
+        function selectNode(node) {
+            selectedNode = node;
+            const content = document.getElementById("detail-content");
+
+            if (!node) {
+                rightPanel.classList.remove("active");
+                selectedNodeActivePaths.clear();
+                selectedNodeActiveLinks.clear();
+                return;
+            }
+
+            rightPanel.classList.add("active");
+            computeActivePaths(node);
+            
+            // Highlight connections
+            const incoming = [];
+            const outgoing = [];
+            links.forEach(l => {
+                if (l.target === node.id) {
+                    incoming.push({ 
+                        node: nodeIdMap[l.source], 
+                        conf: l.confidence,
+                        type: l.type,
+                        label: l.label,
+                        detail: l.detail 
+                    });
+                }
+                if (l.source === node.id) {
+                    outgoing.push({ 
+                        node: nodeIdMap[l.target], 
+                        conf: l.confidence,
+                        type: l.type,
+                        label: l.label,
+                        detail: l.detail 
+                    });
+                }
+            });
+
+            let criticalityBadge = "";
+            if (node.centralityScore > 0.6) {
+                criticalityBadge = `<span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.4); padding: 2px 6px; font-weight:bold; font-size:0.65rem;">🔥 CRITICAL HUB</span>`;
+            } else if (node.centralityScore > 0.3) {
+                criticalityBadge = `<span class="badge" style="background: rgba(245, 158, 11, 0.2); color: #fde047; border: 1px solid rgba(245, 158, 11, 0.4); padding: 2px 6px; font-weight:bold; font-size:0.65rem;">⚡ HIGH CONFLICT</span>`;
+            } else {
+                criticalityBadge = `<span class="badge" style="background: rgba(148, 163, 184, 0.15); color: #cbd5e1; border: 1px solid rgba(148, 163, 184, 0.3); padding: 2px 6px; font-size:0.65rem;">Normal Linkage</span>`;
+            }
+
+            let specificDetails = "";
+            if (node.type === "rule") {
+                const absPath = `${graphData.pipeline_dir}/${node.file}`;
+                const fileUri = `file://${absPath}`;
+                specificDetails = `
+                    <div class="section-title">Rule Configuration</div>
+                    <div style="font-size: 0.78rem; margin-bottom: 8px; color: var(--text-muted); display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                        <strong>File:</strong> <a href="${fileUri}" target="_blank" style="color: #818cf8; text-decoration: underline; font-family: monospace; font-size: 0.75rem;">${node.file}</a>
+                        <a href="vscode://file${absPath}:1" 
+                           title="Open in VS Code" 
+                           style="display: inline-flex; align-items: center; justify-content: center; background: rgba(99, 102, 241, 0.15); border: 1px solid rgba(99, 102, 241, 0.3); color: #a5b4fc; padding: 2px 6px; border-radius: 4px; font-size: 0.65rem; font-weight: 600; text-decoration: none; cursor: pointer;">
+                           💻 Open in Editor
+                        </a>
+                    </div>
+                    <div class="section-title">Inputs</div>
+                    <ul class="detail-list">
+                        ${node.inputs.map(i => `<li>${i}</li>`).join("") || "<li style='color: var(--text-muted); italic;'>None</li>"}
+                    </ul>
+                    <div class="section-title">Outputs</div>
+                    <ul class="detail-list">
+                        ${node.outputs.map(o => `<li>${o}</li>`).join("") || "<li style='color: var(--text-muted); italic;'>None</li>"}
+                    </ul>
+                `;
+            } else if (node.type === "unresolved") {
+                let pkgName = "";
+                let funcName = node.name;
+                if (node.name.includes("::")) {
+                    const parts = node.name.split("::");
+                    pkgName = parts[0];
+                    funcName = parts[1];
+                }
+                
+                specificDetails = `
+                    <div class="section-title">External Function Context</div>
+                    <div style="font-size: 0.78rem; margin-bottom: 8px; color: var(--text-muted);">
+                        This is an external library or package function.
+                    </div>
+                    ${pkgName ? `
+                    <div style="margin-bottom: 12px;">
+                        <span class="badge badge-unres" style="font-size: 0.7rem; background: rgba(244, 63, 94, 0.2); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.4); padding: 4px 8px;">Package: ${pkgName}</span>
+                    </div>` : ""}
+                    <div style="font-size: 0.78rem; margin-top: 8px; display: flex; gap: 8px;">
+                        <a href="https://rdrr.io/search/?q=${node.name}" target="_blank" style="color: #6366f1; text-decoration: underline; font-weight: 500;">Search Rdrr.io Docs</a>
+                        ${pkgName ? `• <a href="https://rdrr.io/cran/${pkgName}/man/${funcName}.html" target="_blank" style="color: #6366f1; text-decoration: underline; font-weight: 500;">Direct Page</a>` : ""}
+                    </div>
+                `;
+            } else {
+                const absPath = `${graphData.pipeline_dir}/${node.file}`;
+                const fileUri = `file://${absPath}` + (node.line_range.length ? `#L${node.line_range[0]}` : "");
+                specificDetails = `
+                    <div class="section-title">Function Context</div>
+                    <div style="font-size: 0.78rem; margin-bottom: 8px; color: var(--text-muted); display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                        <strong>File:</strong> <a href="${fileUri}" target="_blank" style="color: #818cf8; text-decoration: underline; font-family: monospace; font-size: 0.75rem;">${node.file}</a>
+                        <a href="vscode://file${absPath}:${node.line_range.length ? node.line_range[0] : 1}" 
+                           title="Open in VS Code" 
+                           style="display: inline-flex; align-items: center; justify-content: center; background: rgba(99, 102, 241, 0.15); border: 1px solid rgba(99, 102, 241, 0.3); color: #a5b4fc; padding: 2px 6px; border-radius: 4px; font-size: 0.65rem; font-weight: 600; text-decoration: none; cursor: pointer;">
+                           💻 Open in Editor
+                        </a>
+                    </div>
+                    ${node.line_range.length ? `<div style="font-size: 0.78rem; color: var(--text-muted);"><strong>Line range:</strong> ${node.line_range[0]} - ${node.line_range[1]}</div>` : ""}
+                `;
+            }
+
+            // Preserve the tab if it is still valid, else default to 'overview'
+            if (activeTabId === 'code' && !node.code) {
+                activeTabId = 'overview';
+            }
+
+            const mermaidCode = generateMermaidCode(node, selectedNodeActivePaths);
+
+            content.innerHTML = `
+                <div class="detail-header">
+                    <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; flex-wrap: wrap; gap: 6px;">
+                        <div class="detail-title">${node.name}</div>
+                        ${node.git_modified ? `<span class="badge" style="background: rgba(249, 115, 22, 0.2); color: #fdba74; border: 1px solid rgba(249, 115, 22, 0.4); font-weight: bold; font-size: 0.65rem;">📝 GIT MODIFIED</span>` : ""}
+                    </div>
+                    <span class="badge ${node.type === 'rule' ? 'badge-rule' : node.type === 'unresolved' ? 'badge-unres' : 'badge-func'}" style="margin-top:5px; display:inline-block;">${node.type.toUpperCase()}</span>
+                </div>
+                
+                <div class="tabs">
+                    <div class="tab-btn ${activeTabId === 'overview' ? 'active' : ''}" id="tab-btn-overview" onclick="switchTab('overview')">Overview</div>
+                    <div class="tab-btn ${activeTabId === 'trace' ? 'active' : ''}" id="tab-btn-trace" onclick="switchTab('trace')">Graph Trace</div>
+                    ${node.code ? `<div class="tab-btn ${activeTabId === 'code' ? 'active' : ''}" id="tab-btn-code" onclick="switchTab('code')">Source Code</div>` : ""}
+                    <div class="tab-btn ${activeTabId === 'mermaid' ? 'active' : ''}" id="tab-btn-mermaid" onclick="switchTab('mermaid')">Mermaid Flow</div>
+                </div>
+
+                <div id="tab-content-overview" class="tab-content ${activeTabId === 'overview' ? 'active' : ''}">
+                    ${specificDetails}
+                    <div class="section-title">Criticality Analysis</div>
+                    <div style="font-size: 0.78rem; display: flex; align-items: center; gap: 8px;">
+                        <strong>Linkage Strength:</strong> ${criticalityBadge}
+                    </div>
+                    <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 6px; line-height: 1.35;">
+                        Degree score: <strong>${node.centrality}</strong> active connections.
+                    </div>
+                </div>
+
+                <div id="tab-content-trace" class="tab-content ${activeTabId === 'trace' ? 'active' : ''}">
+                    <div class="section-title">Dependencies (Upstream)</div>
+                    <ul class="detail-list" style="padding-left:0;">
+                        ${incoming.map(i => {
+                            let connDesc = "";
+                            if (i.type === "pipeline_dep") {
+                                connDesc = `Depends on outputs of rule <code>${i.node.name}</code> (matched via <code>${i.label}</code>)`;
+                            } else if (i.type === "r_call") {
+                                if (node.type === "rule") {
+                                    connDesc = `Executed inside rule's script (calls function <code>${i.node.name}()</code>)`;
+                                } else {
+                                    connDesc = `Calls function <code>${i.node.name}()</code>`;
+                                }
+                            }
+                            return `
+                                <li style="display:flex; flex-direction:column; gap:4px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); padding: 10px 14px; border-radius: 8px; margin-bottom: 6px; list-style:none;">
+                                    <div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+                                        <span style="color: #818cf8; cursor:pointer; font-weight: 600;" onclick="selectNodeById('${i.node.id}')">${i.node.name}</span>
+                                        <span class="badge ${i.conf === 'HIGH' ? 'badge-func' : i.conf === 'AMBIGUOUS' ? 'badge-rule' : 'badge-unres'}">${i.conf}</span>
+                                    </div>
+                                    <div style="font-size:0.75rem; color:var(--text-main); margin-top:2px;">
+                                        ${connDesc}
+                                    </div>
+                                    ${i.detail ? `<div style="font-size:0.7rem; color:var(--text-muted); font-style:italic;">Note: ${i.detail}</div>` : ""}
+                                </li>
+                            `;
+                        }).join("") || "<li style='color: var(--text-muted); list-style:none;'>None</li>"}
+                    </ul>
+
+                    <div class="section-title">Downstream Impact (What breaks if changed)</div>
+                    <ul class="detail-list" style="padding-left:0;">
+                        ${outgoing.map(o => {
+                            let connDesc = "";
+                            if (o.type === "pipeline_dep") {
+                                connDesc = `Feeds outputs into rule <code>${o.node.name}</code> (matched via <code>${o.label}</code>)`;
+                            } else if (o.type === "r_call") {
+                                if (o.node.type === "rule") {
+                                    connDesc = `Called inside script run by Snakemake rule <code>${o.node.name}</code> (<code>${o.node.file}</code>)`;
+                                } else {
+                                    connDesc = `Called inside body of function <code>${o.node.name}()</code>`;
+                                }
+                            }
+                            return `
+                                <li style="display:flex; flex-direction:column; gap:4px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); padding: 10px 14px; border-radius: 8px; margin-bottom: 6px; list-style:none;">
+                                    <div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+                                        <span style="color: #818cf8; cursor:pointer; font-weight: 600;" onclick="selectNodeById('${o.node.id}')">${o.node.name}</span>
+                                        <span class="badge ${o.conf === 'HIGH' ? 'badge-func' : o.conf === 'AMBIGUOUS' ? 'badge-rule' : 'badge-unres'}">${o.conf}</span>
+                                    </div>
+                                    <div style="font-size:0.75rem; color:var(--text-main); margin-top:2px;">
+                                        ${connDesc}
+                                    </div>
+                                    ${o.detail ? `<div style="font-size:0.7rem; color:var(--text-muted); font-style:italic;">Note: ${o.detail}</div>` : ""}
+                                </li>
+                            `;
+                        }).join("") || "<li style='color: var(--text-muted); list-style:none;'>None</li>"}
+                    </ul>
+                </div>
+
+                ${node.code ? `
+                <div id="tab-content-code" class="tab-content ${activeTabId === 'code' ? 'active' : ''}">
+                    <div class="section-title">Source Code Preview</div>
+                    <pre class="code-container"><code>${highlightCode(node.code)}</code></pre>
+                </div>
+                ` : ""}
+
+                <div id="tab-content-mermaid" class="tab-content ${activeTabId === 'mermaid' ? 'active' : ''}">
+                    <div class="section-title" style="margin-top:0; margin-bottom: 10px;">Interactive Flowchart</div>
+                    <div id="mermaid-rendered-flowchart" style="background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; margin-bottom: 16px; display: flex; justify-content: center; overflow-x: auto; min-height: 120px;">
+                        <div style="color: var(--text-muted); font-size: 0.75rem; text-align: center; width: 100%; padding: 20px 0;">Generating Flowchart...</div>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 10px;">
+                        <span class="section-title" style="margin-top:0; margin-bottom:0;">Mermaid Flowchart Code</span>
+                        <button id="mermaid-copy-btn" class="btn" style="padding: 4px 10px; font-size: 0.65rem;" onclick="copyMermaidToClipboard()">📋 Copy Code</button>
+                    </div>
+                    <pre class="code-container" style="color: #c084fc; max-height: 200px;"><code id="mermaid-code-block">${escapeHtml(mermaidCode)}</code></pre>
+                    <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 10px; line-height: 1.45;">
+                        💡 Click nodes in the visual flow above to quickly focus the main graph canvas on that node!
+                    </div>
+                </div>
+            `;
+
+            renderMermaidFlowchart(node, mermaidCode);
+            isSimulating = true; // Wake physics to focus/re-layout
+            populateNodeList(document.getElementById("search-input").value);
+        }
+
+        window.selectNodeById = function(id) {
+            const node = nodeIdMap[id];
+            if (node) {
+                selectNode(node);
+                // Center camera smoothly on selected node
+                transform.x = width / 2 - node.x * transform.k;
+                transform.y = height / 2 - node.y * transform.k;
+            }
+        };
+
+        // Graph Simulation Loop
+        function runSimulation() {
+            const hideUnresolved = document.getElementById("hide-unresolved-cb").checked;
+            const focusModeCb = document.getElementById("focus-mode-cb");
+            const isFocusMode = focusModeCb && focusModeCb.checked && selectedNode;
+            
+            // Script groups grouping calculations
+            const groups = {};
+            nodes.forEach(n => {
+                if (n.type === 'function' && n.file) {
+                    groups[n.file] = groups[n.file] || [];
+                    groups[n.file].push(n);
+                }
+            });
+
+            // Group collapsing layout handler
+            Object.entries(groups).forEach(([filename, groupNodes]) => {
+                if (groupNodes.length < 2) return;
+                
+                if (collapsedGroups.has(filename)) {
+                    let avgX = 0, avgY = 0, activeCount = 0;
+                    groupNodes.forEach(gn => {
+                        if (isFocusMode && !selectedNodeActivePaths.has(gn.id)) return;
+                        avgX += gn.x;
+                        avgY += gn.y;
+                        activeCount++;
+                    });
+                    
+                    if (activeCount > 0) {
+                        avgX /= activeCount;
+                        avgY /= activeCount;
+                    } else {
+                        avgX = width / 2;
+                        avgY = height / 2;
+                    }
+                    
+                    groupNodes.forEach(gn => {
+                        gn.x += (avgX - gn.x) * 0.35;
+                        gn.y += (avgY - gn.y) * 0.35;
+                        gn.vx = 0;
+                        gn.vy = 0;
+                        gn.width = 0.1;
+                        gn.height = 0.1;
+                        gn.radius = 0.1;
+                    });
+                    
+                    const primary = groupNodes.find(gn => !isFocusMode || selectedNodeActivePaths.has(gn.id)) || groupNodes[0];
+                    if (primary) {
+                        primary.width = Math.max(primary.baseWidth, 90);
+                        primary.height = primary.baseHeight;
+                        primary.radius = primary.width / 2;
+                    }
+                } else {
+                    groupNodes.forEach(gn => {
+                        if (gn.width < 1.0) {
+                            gn.width = gn.baseWidth;
+                            gn.height = gn.baseHeight;
+                            gn.radius = gn.baseWidth / 2;
+                        }
+                    });
+                }
+            });
+
+            // Target dimensions and sizing configurations (stable pill shape at all times)
+            nodes.forEach(n => {
+                if (hideUnresolved && n.type === 'unresolved') return;
+                if (isFocusMode && !selectedNodeActivePaths.has(n.id)) return;
+                
+                const isSelected = selectedNode && selectedNode.id === n.id;
+                const isHovered = hoveredNode && hoveredNode.id === n.id;
+                
+                // Keep base sizes unless collapsed
+                const isColGroup = n.file && collapsedGroups.has(n.file);
+                const isPrimary = isColGroup && groups[n.file] && (groups[n.file].find(gn => !isFocusMode || selectedNodeActivePaths.has(gn.id)) || groups[n.file][0]) === n;
+                
+                if (isColGroup && !isPrimary) {
+                    // Do not resize if collapsed secondary node
+                    return;
+                }
+                
+                let tW = isColGroup ? Math.max(n.baseWidth, 90) : n.baseWidth;
+                let tH = n.baseHeight;
+                
+                if (isSelected || isHovered) {
+                    tW = tW * 1.15;
+                    tH = tH * 1.15;
+                }
+                
+                n.targetWidth = tW;
+                n.targetHeight = tH;
+                
+                // Interpolate width and height for smooth transitions
+                n.width += (n.targetWidth - n.width) * 0.18;
+                n.height += (n.targetHeight - n.height) * 0.18;
+                
+                // Set radius to half-width for general physics repulsion sizing
+                n.targetRadius = n.width / 2;
+                n.radius += (n.targetRadius - n.radius) * 0.18;
+            });
+
+            // Layered Layout Swimlane gravity (Rules on top, functions in middle, unresolved at bottom)
+            if (layoutMode === 'swimlane') {
+                nodes.forEach(n => {
+                    if (hideUnresolved && n.type === 'unresolved') return;
+                    if (isFocusMode && !selectedNodeActivePaths.has(n.id)) return;
+                    
+                    let targetY = height / 2;
+                    if (n.type === 'rule') {
+                        targetY = height * 0.23;
+                    } else if (n.type === 'function') {
+                        targetY = height * 0.53;
+                    } else if (n.type === 'unresolved') {
+                        targetY = height * 0.83;
+                    }
+                    
+                    n.vy += (targetY - n.y) * 0.008;
+                });
+            }
+
+            if (!isSimulating) return;
+
+            // Repulsion forces between nodes (skip unresolved if hidden)
+            for (let i = 0; i < nodes.length; i++) {
+                if (hideUnresolved && nodes[i].type === 'unresolved') continue;
+                if (isFocusMode && !selectedNodeActivePaths.has(nodes[i].id)) continue;
+                // Exclude collapsed secondary nodes
+                if (nodes[i].width < 1.0) continue;
+                
+                for (let j = i + 1; j < nodes.length; j++) {
+                    if (hideUnresolved && nodes[j].type === 'unresolved') continue;
+                    if (isFocusMode && !selectedNodeActivePaths.has(nodes[j].id)) continue;
+                    if (nodes[j].width < 1.0) continue;
+                    
+                    let dx = nodes[j].x - nodes[i].x;
+                    let dy = nodes[j].y - nodes[i].y;
+                    if (dx === 0) dx = 0.1;
+                    let dist = Math.sqrt(dx*dx + dy*dy);
+                    if (dist < 1) dist = 1;
+
+                    // 1. Smooth repulsion force (increased strength for wider default layout)
+                    let strength = 950;
+                    let force = strength / (dist * dist);
+                    
+                    if (dist < 55) {
+                        force += (55 - dist) * 0.85; // buffer zone
+                    }
+
+                    let fx = (dx / dist) * force;
+                    let fy = (dy / dist) * force;
+
+                    nodes[i].vx -= fx;
+                    nodes[i].vy -= fy;
+                    nodes[j].vx += fx;
+                    nodes[j].vy += fy;
+
+                    // 2. Hard Axis-Aligned Bounding Box (AABB) Collision Solver to completely prevent overlaps
+                    const hWidthI = nodes[i].width / 2;
+                    const hHeightI = nodes[i].height / 2;
+                    const hWidthJ = nodes[j].width / 2;
+                    const hHeightJ = nodes[j].height / 2;
+
+                    const padX = 14; // Horizontal safety buffer between node capsules
+                    const padY = 12; // Vertical safety buffer between node capsules
+                    
+                    const minDistanceX = hWidthI + hWidthJ + padX;
+                    const minDistanceY = hHeightI + hHeightJ + padY;
+
+                    const overlapX = minDistanceX - Math.abs(dx);
+                    const overlapY = minDistanceY - Math.abs(dy);
+
+                    if (overlapX > 0 && overlapY > 0) {
+                        // Resolve overlaps by applying velocity-based push along minimum penetration axis to guarantee simulation stability
+                        if (overlapX < overlapY) {
+                            const sign = dx > 0 ? 1 : -1;
+                            const pushForce = overlapX * 0.12 * sign;
+                            nodes[i].vx -= pushForce;
+                            nodes[j].vx += pushForce;
+                        } else {
+                            const sign = dy > 0 ? 1 : -1;
+                            const pushForce = overlapY * 0.12 * sign;
+                            nodes[i].vy -= pushForce;
+                            nodes[j].vy += pushForce;
+                        }
+                    }
+                }
+            }
+
+            // Spring forces along links (skip unresolved if hidden)
+            links.forEach(l => {
+                let source = nodeIdMap[l.source];
+                let target = nodeIdMap[l.target];
+                if (!source || !target) return;
+                if (hideUnresolved && (source.type === 'unresolved' || target.type === 'unresolved')) return;
+                if (isFocusMode && (!selectedNodeActivePaths.has(l.source) || !selectedNodeActivePaths.has(l.target))) return;
+
+                let dx = target.x - source.x;
+                let dy = target.y - source.y;
+                let dist = Math.sqrt(dx*dx + dy*dy);
+                if (dist < 1) dist = 1;
+
+                let restLength = 140; // Increased link rest length for more spacious layouts
+                let k = 0.07;
+                let force = (dist - restLength) * k;
+
+                let fx = (dx / dist) * force;
+                let fy = (dy / dist) * force;
+
+                source.vx += fx;
+                source.vy += fy;
+                target.vx -= fx;
+                target.vy -= fy;
+            });
+
+            // Interactive Cursor Repulsion (skip unresolved if hidden)
+            if (mouseSim.x !== null && mouseSim.y !== null) {
+                nodes.forEach(n => {
+                    if (hideUnresolved && n.type === 'unresolved') return;
+                    if (isFocusMode && !selectedNodeActivePaths.has(n.id)) return;
+                    if (n.width < 1.0) return;
+                    
+                    let dx = n.x - mouseSim.x;
+                    let dy = n.y - mouseSim.y;
+                    let dist = Math.sqrt(dx*dx + dy*dy);
+                    if (dist < 120 && dist > 1) {
+                        let force = (120 - dist) * 0.12; // push node gently away from cursor
+                        n.vx += (dx / dist) * force;
+                        n.vy += (dy / dist) * force;
+                    }
+                });
+            }
+
+            // Subtle continuous Brownian motion / drift so graph feels organic and "alive"
+            nodes.forEach(n => {
+                if (hideUnresolved && n.type === 'unresolved') return;
+                if (isFocusMode && !selectedNodeActivePaths.has(n.id)) return;
+                if (n.width < 1.0) return;
+                n.vx += (Math.random() - 0.5) * 0.08;
+                n.vy += (Math.random() - 0.5) * 0.08;
+            });
+
+            // Gravity towards screen center & apply velocity (skip unresolved if hidden)
+            nodes.forEach(n => {
+                if (hideUnresolved && n.type === 'unresolved') return;
+                if (isFocusMode && !selectedNodeActivePaths.has(n.id)) return;
+                
+                let dx = width / 2 - n.x;
+                let dy = height / 2 - n.y;
+                n.vx += dx * 0.001; // Dampened from 0.0035 to 0.001 so nodes disperse naturally
+                n.vy += dy * 0.001;
+
+                n.vx *= 0.72; // friction decay
+                n.vy *= 0.72;
+
+                if (n !== draggedNode) {
+                    n.x += n.vx;
+                    n.y += n.vy;
+                }
+            });
+        }
+
+        // Draw grid background helper
+        function drawGrid() {
+            ctx.save();
+            ctx.strokeStyle = "rgba(255, 255, 255, 0.015)";
+            ctx.lineWidth = 0.8;
+            
+            const gridSize = 45;
+            
+            // Start points in simulation coordinates
+            const startSim = toSimCoords(0, 0);
+            const endSim = toSimCoords(width, height);
+            
+            const startX = Math.floor(startSim.x / gridSize) * gridSize;
+            const endX = Math.ceil(endSim.x / gridSize) * gridSize;
+            const startY = Math.floor(startSim.y / gridSize) * gridSize;
+            const endY = Math.ceil(endSim.y / gridSize) * gridSize;
+            
+            // Draw grid lines
+            ctx.beginPath();
+            for (let x = startX; x <= endX; x += gridSize) {
+                ctx.moveTo(x, startY);
+                ctx.lineTo(x, endY);
+            }
+            for (let y = startY; y <= endY; y += gridSize) {
+                ctx.moveTo(startX, y);
+                ctx.lineTo(endX, y);
+            }
+            ctx.stroke();
+            
+            // Draw secondary grid lines for a fine-grain blueprint style
+            ctx.strokeStyle = "rgba(255, 255, 255, 0.005)";
+            ctx.lineWidth = 0.5;
+            const subGridSize = 15;
+            ctx.beginPath();
+            for (let x = startX; x <= endX; x += subGridSize) {
+                if (x % gridSize === 0) continue;
+                ctx.moveTo(x, startY);
+                ctx.lineTo(x, endY);
+            }
+            for (let y = startY; y <= endY; y += subGridSize) {
+                if (y % gridSize === 0) continue;
+                ctx.moveTo(startX, y);
+                ctx.lineTo(endX, y);
+            }
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        // Draw Loop (with dynamic filtering of unresolved links/nodes for massive performance gains)
+        function draw() {
+            ctx.clearRect(0, 0, width, height);
+
+            // Draw dynamic background engineering grid first
+            drawGrid();
+
+            ctx.save();
+            ctx.translate(transform.x, transform.y);
+            ctx.scale(transform.k, transform.k);
+
+            const hideUnresolved = document.getElementById("hide-unresolved-cb").checked;
+            const gitImpactCb = document.getElementById("git-impact-cb");
+            const gitImpactOnly = gitImpactCb ? gitImpactCb.checked : false;
+            const search = document.getElementById("search-input").value.trim().toLowerCase();
+            const focusModeCb = document.getElementById("focus-mode-cb");
+            const isFocusMode = focusModeCb && focusModeCb.checked && selectedNode;
+
+            // 1. Build active paths sets (computed in selectNode)
+            const activePaths = selectedNodeActivePaths;
+            const activeLinks = selectedNodeActiveLinks;
+
+            // 2. Draw script background grouping cards (Visual Script Clustering)
+            const groups = {};
+            nodes.forEach(n => {
+                if (n.type === 'function' && n.file) {
+                    groups[n.file] = groups[n.file] || [];
+                    groups[n.file].push(n);
+                }
+            });
+            
+            ctx.save();
+            Object.entries(groups).forEach(([filename, groupNodes]) => {
+                if (groupNodes.length < 2) return;
+                
+                let minX = Infinity, maxX = -Infinity;
+                let minY = Infinity, maxY = -Infinity;
+                groupNodes.forEach(n => {
+                    if (isFocusMode && !activePaths.has(n.id)) return;
+                    minX = Math.min(minX, n.x - n.width/2);
+                    maxX = Math.max(maxX, n.x + n.width/2);
+                    minY = Math.min(minY, n.y - n.height/2);
+                    maxY = Math.max(maxY, n.y + n.height/2);
+                });
+                
+                if (minX === Infinity) return; // Skip if no nodes visible in focus mode
+                
+                // Hide or dim visual clustering cards if they do not match search query
+                const matchesSearch = !search || filename.toLowerCase().includes(search) || groupNodes.some(n => n.name.toLowerCase().includes(search));
+                const hasGitActiveNodes = !gitImpactOnly || groupNodes.some(n => gitImpactNodes.has(n.id));
+                const cardOpacity = matchesSearch && hasGitActiveNodes ? 1.0 : 0.05;
+
+                const pad = 12;
+                const rx = minX - pad;
+                const ry = minY - pad - 12;
+                const rw = (maxX - minX) + pad*2;
+                const rh = (maxY - minY) + pad*2 + 12;
+                
+                const isCollapsed = collapsedGroups.has(filename);
+                if (isCollapsed) {
+                    // Draw collapsed folder card
+                    ctx.fillStyle = `rgba(15, 23, 42, ${0.6 * cardOpacity})`;
+                    ctx.strokeStyle = `rgba(99, 102, 241, ${0.45 * cardOpacity})`;
+                    ctx.lineWidth = 1.5;
+                    ctx.setLineDash([]);
+                } else {
+                    ctx.fillStyle = `rgba(30, 41, 59, ${0.15 * cardOpacity})`;
+                    ctx.strokeStyle = `rgba(255, 255, 255, ${0.05 * cardOpacity})`;
+                    ctx.lineWidth = 1;
+                    ctx.setLineDash([4, 4]);
+                }
+                
+                ctx.beginPath();
+                const cardRadius = 8;
+                ctx.moveTo(rx + cardRadius, ry);
+                ctx.lineTo(rx + rw - cardRadius, ry);
+                ctx.quadraticCurveTo(rx + rw, ry, rx + rw, ry + cardRadius);
+                ctx.lineTo(rx + rw, ry + rh - cardRadius);
+                ctx.quadraticCurveTo(rx + rw, ry + rh, rx + rw - cardRadius, ry + rh);
+                ctx.lineTo(rx + cardRadius, ry + rh);
+                ctx.quadraticCurveTo(rx, ry + rh, rx, ry + rh - cardRadius);
+                ctx.lineTo(rx, ry + cardRadius);
+                ctx.quadraticCurveTo(rx, ry, rx + cardRadius, ry);
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+                ctx.setLineDash([]);
+                
+                ctx.fillStyle = isCollapsed ? `rgba(165, 180, 252, ${0.85 * cardOpacity})` : `rgba(148, 163, 184, ${0.5 * cardOpacity})`;
+                ctx.font = isCollapsed ? "bold italic 7.5px sans-serif" : "italic 7px sans-serif";
+                ctx.textAlign = "left";
+                ctx.textBaseline = "top";
+                ctx.fillText((isCollapsed ? "📂 [Collapsed Folder] " : "") + filename, rx + 8, ry + 6);
+            });
+            ctx.restore();
+
+            // Draw link paths (skip unresolved if hidden)
+            links.forEach(l => {
+                const s = nodeIdMap[l.source];
+                const t = nodeIdMap[l.target];
+                if (!s || !t) return;
+                if (hideUnresolved && (s.type === 'unresolved' || t.type === 'unresolved')) return;
+                if (isFocusMode && (!activePaths.has(l.source) || !activePaths.has(l.target))) return;
+
+                const matchesSearch = nodeMatchesSearch(s) || nodeMatchesSearch(t);
+                const isLinkHighlighted = matchesSearch && (!selectedNode || activeLinks.has(l)) && (!gitImpactOnly || (gitImpactNodes.has(l.source) && gitImpactNodes.has(l.target)));
+                const edgeOpacity = isLinkHighlighted ? 1.0 : 0.04;
+
+                // Calculate curved control point (quadratic Bezier) to prevent straight line overlaps
+                let dx = t.x - s.x;
+                let dy = t.y - s.y;
+                let dist = Math.sqrt(dx*dx + dy*dy);
+                if (dist < 1) dist = 1;
+                
+                // Perpendicular vector for curving
+                let nx = -dy / dist;
+                let ny = dx / dist;
+                let curveOffset = dist * 0.12; 
+                let qx = (s.x + t.x) / 2 + nx * curveOffset;
+                let qy = (s.y + t.y) / 2 + ny * curveOffset;
+
+                // Define node type colors for gradients
+                let sColor = s.type === 'rule' ? '#6366f1' : s.type === 'unresolved' ? '#f43f5e' : '#10b981';
+                let tColor = t.type === 'rule' ? '#6366f1' : t.type === 'unresolved' ? '#f43f5e' : '#10b981';
+                
+                const isLinkSelected = selectedNode && (selectedNode.id === s.id || selectedNode.id === t.id);
+                
+                ctx.beginPath();
+                ctx.moveTo(s.x, s.y);
+                ctx.quadraticCurveTo(qx, qy, t.x, t.y);
+
+                // Edge gradient color blending (represents information flow direction)
+                let grad = ctx.createLinearGradient(s.x, s.y, t.x, t.y);
+                let alpha = isLinkSelected ? 0.75 : 0.16;
+                
+                // If change propagation risk is active, color downstream edges amber/orange
+                if (hasGitChanges && l.source in gitRiskScores) {
+                    const sourceRisk = gitRiskScores[l.source];
+                    if (sourceRisk === 0) {
+                        sColor = '#ef4444'; // direct modified is red
+                    } else if (sourceRisk === 1) {
+                        sColor = '#f97316'; // first degree is orange
+                    } else {
+                        sColor = '#fbbf24'; // secondary degree is amber
+                    }
+                }
+
+                grad.addColorStop(0, hexToRgba(sColor, alpha * edgeOpacity));
+                grad.addColorStop(1, hexToRgba(tColor, alpha * edgeOpacity));
+
+                ctx.strokeStyle = grad;
+                ctx.lineWidth = isLinkSelected ? 2.2 : 1.2;
+                ctx.stroke();
+
+                // Draw edge arrows aligned with the curve tangent at target
+                const angle = Math.atan2(t.y - qy, t.x - qx);
+                const arrowLength = 6;
+                
+                // Ellipse boundary intersection for rectangular nodes
+                const cos = Math.cos(angle);
+                const sin = Math.sin(angle);
+                const halfW = t.width / 2;
+                const halfH = t.height / 2;
+                const arrowOffset = Math.sqrt((halfW * cos)**2 + (halfH * sin)**2) + 3;
+                
+                const arrowX = t.x - arrowOffset * Math.cos(angle);
+                const arrowY = t.y - arrowOffset * Math.sin(angle);
+
+                ctx.beginPath();
+                ctx.moveTo(arrowX, arrowY);
+                ctx.lineTo(arrowX - arrowLength * Math.cos(angle - Math.PI/6), arrowY - arrowLength * Math.sin(angle - Math.PI/6));
+                ctx.lineTo(arrowX - arrowLength * Math.cos(angle + Math.PI/6), arrowY - arrowLength * Math.sin(angle + Math.PI/6));
+                ctx.closePath();
+                ctx.fillStyle = isLinkSelected ? hexToRgba(tColor, 0.8 * edgeOpacity) : hexToRgba(tColor, 0.25 * edgeOpacity);
+                ctx.fill();
+
+                // Draw rotated connection labels along the edge (only drawn if selected/hovered)
+                const isLinkHovered = hoveredNode && (hoveredNode.id === s.id || hoveredNode.id === t.id);
+                const showLabels = isLinkSelected || isLinkHovered;
+                if (l.label && showLabels && isLinkHighlighted) {
+                    const mx = 0.25 * s.x + 0.5 * qx + 0.25 * t.x;
+                    const my = 0.25 * s.y + 0.5 * qy + 0.25 * t.y;
+
+                    let textAngle = Math.atan2(t.y - s.y, t.x - s.x);
+                    if (textAngle > Math.PI / 2 || textAngle < -Math.PI / 2) {
+                        textAngle += Math.PI; // orient text to always be readable
+                    }
+
+                    ctx.save();
+                    ctx.translate(mx, my);
+                    ctx.rotate(textAngle);
+                    
+                    ctx.font = isLinkSelected ? "bold 7px sans-serif" : "7px sans-serif";
+                    
+                    const labelText = l.label;
+                    const textWidth = ctx.measureText(labelText).width;
+                    
+                    // Capsule mask background for readability
+                    ctx.fillStyle = "rgba(6, 9, 19, 0.88)";
+                    ctx.beginPath();
+                    ctx.rect(-textWidth/2 - 4, -5, textWidth + 8, 10);
+                    ctx.fill();
+                    
+                    ctx.strokeStyle = isLinkSelected ? hexToRgba(tColor, 0.4) : "rgba(255, 255, 255, 0.05)";
+                    ctx.lineWidth = 0.5;
+                    ctx.stroke();
+
+                    ctx.fillStyle = isLinkSelected ? "#ffffff" : "rgba(156, 163, 175, 0.6)";
+                    ctx.textAlign = "center";
+                    ctx.textBaseline = "middle";
+                    ctx.fillText(labelText, 0, 0);
+                    ctx.restore();
+                }
+            });
+
+            // Draw animated pulse indicators gliding along curved edges (skip unresolved if hidden)
+            const pulseTime = Date.now() * 0.0012;
+            links.forEach(l => {
+                const s = nodeIdMap[l.source];
+                const t = nodeIdMap[l.target];
+                if (!s || !t) return;
+                if (hideUnresolved && (s.type === 'unresolved' || t.type === 'unresolved')) return;
+                if (isFocusMode && (!activePaths.has(l.source) || !activePaths.has(l.target))) return;
+
+                const matchesSearch = !search || s.name.toLowerCase().includes(search) || t.name.toLowerCase().includes(search);
+                const isLinkHighlighted = matchesSearch && (!selectedNode || activeLinks.has(l));
+                
+                // Prune pulse indicators on non-highlighted links for clean presentation
+                if (!isLinkHighlighted) return;
+
+                let dx = t.x - s.x;
+                let dy = t.y - s.y;
+                let dist = Math.sqrt(dx*dx + dy*dy);
+                if (dist < 1) dist = 1;
+                
+                let nx = -dy / dist;
+                let ny = dx / dist;
+                let curveOffset = dist * 0.12; 
+                let qx = (s.x + t.x) / 2 + nx * curveOffset;
+                let qy = (s.y + t.y) / 2 + ny * curveOffset;
+
+                const offset = (s.x + s.y) * 0.003;
+                const progress = (pulseTime + offset) % 1.0;
+                
+                // Calculate coordinate along quadratic Bezier curve
+                const px = (1-progress)*(1-progress)*s.x + 2*(1-progress)*progress*qx + progress*progress*t.x;
+                const py = (1-progress)*(1-progress)*s.y + 2*(1-progress)*progress*qy + progress*progress*t.y;
+
+                let pulseColor = "rgba(255, 255, 255, 0.4)";
+                if (selectedNode && (selectedNode.id === s.id || selectedNode.id === t.id)) {
+                    pulseColor = l.confidence === 'HIGH' ? "#10b981" : 
+                                 l.confidence === 'AMBIGUOUS' ? "#6366f1" : "#f43f5e";
+                }
+
+                ctx.beginPath();
+                ctx.arc(px, py, 2.2, 0, 2 * Math.PI);
+                ctx.fillStyle = pulseColor;
+                ctx.shadowColor = pulseColor;
+                ctx.shadowBlur = 4;
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            });
+
+            // Draw Nodes (represented as clean glassmorphic pill badges matching biological pathway standards, skip unresolved if hidden)
+            nodes.forEach(n => {
+                if (hideUnresolved && n.type === 'unresolved') return;
+                if (isFocusMode && !activePaths.has(n.id)) return;
+
+                // Collapsed script group visual reduction
+                const isColGroup = n.file && collapsedGroups.has(n.file);
+                if (isColGroup) {
+                    const primary = groups[n.file] && (groups[n.file].find(gn => !isFocusMode || activePaths.has(gn.id)) || groups[n.file][0]);
+                    if (primary !== n) return; // Skip drawing secondary collapsed nodes
+                }
+
+                const isSelected = selectedNode && selectedNode.id === n.id;
+                const isHovered = hoveredNode && hoveredNode.id === n.id;
+
+                const matchesSearch = nodeMatchesSearch(n);
+                const isHighlighted = matchesSearch && (!selectedNode || activePaths.has(n.id)) && (!gitImpactOnly || gitImpactNodes.has(n.id));
+                const nodeOpacity = isHighlighted ? 1.0 : 0.04;
+
+                let baseColor = "#10b981"; // FUNC
+                if (n.type === "rule") {
+                    baseColor = "#6366f1"; // RULE
+                } else if (n.type === "unresolved") {
+                    baseColor = "#f43f5e"; // UNRES
+                }
+
+                const w = n.width;
+                const h = n.height;
+                const rx = n.x - w/2;
+                const ry = n.y - h/2;
+
+                ctx.beginPath();
+                const radius = 6; // rounded corner radius
+                ctx.moveTo(rx + radius, ry);
+                ctx.lineTo(rx + w - radius, ry);
+                ctx.quadraticCurveTo(rx + w, ry, rx + w, ry + radius);
+                ctx.lineTo(rx + w, ry + h - radius);
+                ctx.quadraticCurveTo(rx + w, ry + h, rx + w - radius, ry + h);
+                ctx.lineTo(rx + radius, ry + h);
+                ctx.quadraticCurveTo(rx, ry + h, rx, ry + h - radius);
+                ctx.lineTo(rx, ry + radius);
+                ctx.quadraticCurveTo(rx, ry, rx + radius, ry);
+                ctx.closePath();
+
+                // Glassmorphic node fill
+                let fillAlpha = isSelected ? 0.35 : isHovered ? 0.22 : 0.10;
+                ctx.fillStyle = hexToRgba(baseColor, fillAlpha * nodeOpacity);
+                ctx.fill();
+
+                // Border outline
+                ctx.strokeStyle = isSelected ? hexToRgba("#ffffff", nodeOpacity) : isHovered ? hexToRgba(baseColor, 0.95 * nodeOpacity) : hexToRgba(baseColor, 0.55 * nodeOpacity);
+                ctx.lineWidth = isSelected ? 2.0 : isHovered ? 1.5 : 1.0;
+                
+                // Represent unresolved node borders as dashed lines
+                if (n.type === "unresolved") {
+                    ctx.setLineDash([3, 3]);
+                } else {
+                    ctx.setLineDash([]);
+                }
+                ctx.stroke();
+                ctx.setLineDash([]); // reset
+
+                // Draw dynamic change propagation warnings (neon risk halos)
+                if (hasGitChanges && n.id in gitRiskScores && isHighlighted) {
+                    ctx.save();
+                    const riskDist = gitRiskScores[n.id];
+                    let glowColor = "rgba(249, 115, 22, 0.4)"; // Orange (1st degree)
+                    let pulseFreq = 0.003;
+                    if (riskDist === 0) {
+                        glowColor = "rgba(239, 68, 68, 0.6)"; // Red (modified source)
+                        pulseFreq = 0.005;
+                    } else if (riskDist === 1) {
+                        glowColor = "rgba(249, 115, 22, 0.45)"; // Orange (direct consumer)
+                        pulseFreq = 0.003;
+                    } else {
+                        glowColor = "rgba(234, 179, 8, 0.25)"; // Yellow (secondary blast radius)
+                        pulseFreq = 0.002;
+                    }
+                    
+                    const pulseFactor = 0.5 + 0.5 * Math.sin(Date.now() * pulseFreq);
+                    const padPulse = 3 + 4 * pulseFactor;
+                    
+                    ctx.shadowColor = glowColor;
+                    ctx.shadowBlur = 10 * pulseFactor;
+                    ctx.strokeStyle = glowColor;
+                    ctx.lineWidth = isSelected ? 2.5 : isHovered ? 2.0 : 1.5;
+                    
+                    ctx.beginPath();
+                    const rX = rx - padPulse/2;
+                    const rY = ry - padPulse/2;
+                    const rW = w + padPulse;
+                    const rH = h + padPulse;
+                    const rRadius = radius + padPulse/2;
+                    
+                    ctx.moveTo(rX + rRadius, rY);
+                    ctx.lineTo(rX + rW - rRadius, rY);
+                    ctx.quadraticCurveTo(rX + rW, rY, rX + rW, rY + rRadius);
+                    ctx.lineTo(rX + rW, rY + rH - rRadius);
+                    ctx.quadraticCurveTo(rX + rW, rY + rH, rX + rW - rRadius, rY + rH);
+                    ctx.lineTo(rX + rRadius, rY + rH);
+                    ctx.quadraticCurveTo(rX, rY + rH, rX, rY + rH - rRadius);
+                    ctx.lineTo(rX, rY + rRadius);
+                    ctx.quadraticCurveTo(rX, rY, rX + rRadius, rY);
+                    ctx.closePath();
+                    ctx.stroke();
+                    ctx.restore();
+                }
+
+                // Draw orange highlight border for Git modified files (source)
+                if (n.git_modified && isHighlighted) {
+                    ctx.save();
+                    ctx.shadowColor = "#f97316";
+                    ctx.shadowBlur = 8;
+                    ctx.strokeStyle = hexToRgba("#f97316", nodeOpacity);
+                    ctx.lineWidth = isSelected ? 2.5 : isHovered ? 2.0 : 1.5;
+                    ctx.beginPath();
+                    ctx.moveTo(rx + radius, ry);
+                    ctx.lineTo(rx + w - radius, ry);
+                    ctx.quadraticCurveTo(rx + w, ry, rx + w, ry + radius);
+                    ctx.lineTo(rx + w, ry + h - radius);
+                    ctx.quadraticCurveTo(rx + w, ry + h, rx + w - radius, ry + h);
+                    ctx.lineTo(rx + radius, ry + h);
+                    ctx.quadraticCurveTo(rx, ry + h, rx, ry + h - radius);
+                    ctx.lineTo(rx, ry + radius);
+                    ctx.quadraticCurveTo(rx, ry, rx + radius, ry);
+                    ctx.closePath();
+                    ctx.stroke();
+                    ctx.restore();
+                }
+
+                // Draw drop-shadow halo glows for active selections
+                if (isSelected) {
+                    ctx.save();
+                    ctx.shadowColor = baseColor;
+                    ctx.shadowBlur = 15;
+                    ctx.beginPath();
+                    ctx.moveTo(rx + radius, ry);
+                    ctx.lineTo(rx + w - radius, ry);
+                    ctx.quadraticCurveTo(rx + w, ry, rx + w, ry + radius);
+                    ctx.lineTo(rx + w, ry + h - radius);
+                    ctx.quadraticCurveTo(rx + w, ry + h, rx + w - radius, ry + h);
+                    ctx.lineTo(rx + radius, ry + h);
+                    ctx.quadraticCurveTo(rx, ry + h, rx, ry + h - radius);
+                    ctx.lineTo(rx, ry + radius);
+                    ctx.quadraticCurveTo(rx, ry, rx + radius, ry);
+                    ctx.closePath();
+                    ctx.strokeStyle = hexToRgba(baseColor, nodeOpacity);
+                    ctx.stroke();
+                    ctx.restore();
+                }
+
+                // Draw text inside the default pill badge capsule (no canvas card expansion, clean UI)
+                ctx.font = isSelected ? "bold 9px sans-serif" : "9px sans-serif";
+                ctx.fillStyle = isSelected ? hexToRgba("#ffffff", nodeOpacity) : isHovered ? hexToRgba("#f3f4f6", nodeOpacity) : hexToRgba("#cbd5e1", nodeOpacity);
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                
+                // Show folder name if group collapsed
+                const displayName = isColGroup ? `📂 [Folder] ${n.file}` : n.name;
+                ctx.fillText(displayName, n.x, n.y);
+            });
+
+            ctx.restore();
+        }
+
+        // Color brightness adjustment helper
+        function adjustColorBrightness(hex, percent) {
+            let num = parseInt(hex.replace("#",""), 16),
+                amt = Math.round(2.55 * percent),
+                R = (num >> 16) + amt,
+                G = (num >> 8 & 0x00FF) + amt,
+                B = (num & 0x0000FF) + amt;
+            return "#" + (0x1000000 + (R<255?R<0?0:R:255)*0x10000 + (G<255?G<0?0:G:255)*0x100 + (B<255?B<0?0:B:255)).toString(16).slice(1);
+        }
+
+        // Color hex to RGBA converter for custom transparent curved edges
+        function hexToRgba(hex, alpha) {
+            let r = parseInt(hex.slice(1, 3), 16),
+                g = parseInt(hex.slice(3, 5), 16),
+                b = parseInt(hex.slice(5, 7), 16);
+            return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+        }
+
+        const minimapCanvas = document.getElementById("minimapCanvas");
+        const mmCtx = minimapCanvas.getContext("2d");
+        minimapCanvas.width = 150;
+        minimapCanvas.height = 100;
+
+        function drawMinimap() {
+            mmCtx.clearRect(0, 0, 150, 100);
+            
+            const hideUnresolved = document.getElementById("hide-unresolved-cb").checked;
+            
+            // 1. Calculate bounding box of all active nodes
+            let minX = Infinity, maxX = -Infinity;
+            let minY = Infinity, maxY = -Infinity;
+            nodes.forEach(n => {
+                if (hideUnresolved && n.type === 'unresolved') return;
+                minX = Math.min(minX, n.x);
+                maxX = Math.max(maxX, n.x);
+                minY = Math.min(minY, n.y);
+                maxY = Math.max(maxY, n.y);
+            });
+            
+            if (minX === Infinity) return;
+            
+            // Add padding around bounds
+            const pad = 60;
+            minX -= pad; maxX += pad;
+            minY -= pad; maxY += pad;
+            
+            const boundsW = maxX - minX;
+            const boundsH = maxY - minY;
+            
+            // Fit bounds into minimap aspect ratio
+            const scaleX = 150 / boundsW;
+            const scaleY = 100 / boundsH;
+            const scale = Math.min(scaleX, scaleY) * 0.9;
+            
+            const dx = (150 - boundsW * scale) / 2;
+            const dy = (100 - boundsH * scale) / 2;
+            
+            const toMinimap = (x, y) => ({
+                x: (x - minX) * scale + dx,
+                y: (y - minY) * scale + dy
+            });
+            
+            // 2. Draw nodes on minimap
+            nodes.forEach(n => {
+                if (hideUnresolved && n.type === 'unresolved') return;
+                const p = toMinimap(n.x, n.y);
+                let color = "#10b981"; // FUNC
+                if (n.type === "rule") color = "#6366f1"; // RULE
+                else if (n.type === "unresolved") color = "#f43f5e"; // UNRES
+                
+                mmCtx.fillStyle = color;
+                mmCtx.beginPath();
+                mmCtx.arc(p.x, p.y, 2, 0, 2 * Math.PI);
+                mmCtx.fill();
+            });
+            
+            // 3. Draw viewport box on minimap
+            const tl = toSimCoords(0, 0);
+            const br = toSimCoords(width, height);
+            
+            const mTl = toMinimap(tl.x, tl.y);
+            const mBr = toMinimap(br.x, br.y);
+            
+            mmCtx.strokeStyle = "rgba(255, 255, 255, 0.4)";
+            mmCtx.lineWidth = 1;
+            mmCtx.fillStyle = "rgba(255, 255, 255, 0.05)";
+            mmCtx.beginPath();
+            mmCtx.rect(mTl.x, mTl.y, mBr.x - mTl.x, mBr.y - mTl.y);
+            mmCtx.fill();
+            mmCtx.stroke();
+        }
+
+        // Animation loop
+        function tick() {
+            runSimulation();
+            draw();
+            drawMinimap();
+            requestAnimationFrame(tick);
+        }
+        tick();
+
+        // Screen Coordinates to Simulation coordinates converter
+        function toSimCoords(x, y) {
+            return {
+                x: (x - transform.x) / transform.k,
+                y: (y - transform.y) / transform.k
+            };
+        }
+
+        // Double click to collapse/expand group cards
+        canvas.addEventListener("dblclick", (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            const simMouse = toSimCoords(mouseX, mouseY);
+            
+            // Check if clicked inside a group card bounds
+            let clickedGroup = null;
+            
+            const localGroups = {};
+            nodes.forEach(n => {
+                if (n.type === 'function' && n.file) {
+                    localGroups[n.file] = localGroups[n.file] || [];
+                    localGroups[n.file].push(n);
+                }
+            });
+            
+            const focusModeCb = document.getElementById("focus-mode-cb");
+            const isFocusMode = focusModeCb && focusModeCb.checked && selectedNode;
+            
+            Object.entries(localGroups).forEach(([filename, groupNodes]) => {
+                if (groupNodes.length < 2) return;
+                let minX = Infinity, maxX = -Infinity;
+                let minY = Infinity, maxY = -Infinity;
+                groupNodes.forEach(n => {
+                    if (isFocusMode && !selectedNodeActivePaths.has(n.id)) return;
+                    minX = Math.min(minX, n.x - n.width/2);
+                    maxX = Math.max(maxX, n.x + n.width/2);
+                    minY = Math.min(minY, n.y - n.height/2);
+                    maxY = Math.max(maxY, n.y + n.height/2);
+                });
+                if (minX === Infinity) return;
+                
+                const pad = 12;
+                const rx = minX - pad;
+                const ry = minY - pad - 12;
+                const rw = (maxX - minX) + pad*2;
+                const rh = (maxY - minY) + pad*2 + 12;
+                
+                if (simMouse.x >= rx && simMouse.x <= rx + rw &&
+                    simMouse.y >= ry && simMouse.y <= ry + rh) {
+                    clickedGroup = filename;
+                }
+            });
+            
+            if (clickedGroup) {
+                if (collapsedGroups.has(clickedGroup)) {
+                    collapsedGroups.delete(clickedGroup);
+                } else {
+                    collapsedGroups.add(clickedGroup);
+                }
+                isSimulating = true; // wake up physics to re-layout
+                draw();
+            }
+        });
+
+        // Mouse Interactions
+        canvas.addEventListener("mousedown", (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            const simMouse = toSimCoords(mouseX, mouseY);
+            
+            const hideUnresolved = document.getElementById("hide-unresolved-cb").checked;
+            const focusModeCb = document.getElementById("focus-mode-cb");
+            const isFocusMode = focusModeCb && focusModeCb.checked && selectedNode;
+
+            const localGroups = {};
+            nodes.forEach(n => {
+                if (n.type === 'function' && n.file) {
+                    localGroups[n.file] = localGroups[n.file] || [];
+                    localGroups[n.file].push(n);
+                }
+            });
+
+            let clickedNode = null;
+            for (let n of nodes) {
+                if (hideUnresolved && n.type === 'unresolved') continue;
+                if (isFocusMode && !selectedNodeActivePaths.has(n.id)) continue;
+                
+                // If collapsed group, skip secondary nodes
+                if (n.file && collapsedGroups.has(n.file)) {
+                    const primary = localGroups[n.file] && (localGroups[n.file].find(gn => !isFocusMode || selectedNodeActivePaths.has(gn.id)) || localGroups[n.file][0]);
+                    if (primary !== n) continue;
+                }
+
+                const dx = n.x - simMouse.x;
+                const dy = n.y - simMouse.y;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+                if (dist <= n.radius + 5) {
+                    clickedNode = n;
+                    break;
+                }
+            }
+
+            if (clickedNode) {
+                draggedNode = clickedNode;
+                selectNode(clickedNode);
+            } else {
+                isDraggingCanvas = true;
+                dragStart.x = e.clientX - transform.x;
+                dragStart.y = e.clientY - transform.y;
+            }
+        });
+
+        canvas.addEventListener("mousemove", (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            const simMouse = toSimCoords(mouseX, mouseY);
+
+            mouseSim.x = simMouse.x;
+            mouseSim.y = simMouse.y;
+
+            const hideUnresolved = document.getElementById("hide-unresolved-cb").checked;
+            const focusModeCb = document.getElementById("focus-mode-cb");
+            const isFocusMode = focusModeCb && focusModeCb.checked && selectedNode;
+
+            const localGroups = {};
+            nodes.forEach(n => {
+                if (n.type === 'function' && n.file) {
+                    localGroups[n.file] = localGroups[n.file] || [];
+                    localGroups[n.file].push(n);
+                }
+            });
+
+            if (draggedNode) {
+                draggedNode.x = simMouse.x;
+                draggedNode.y = simMouse.y;
+                draggedNode.vx = 0;
+                draggedNode.vy = 0;
+            } else if (isDraggingCanvas) {
+                transform.x = e.clientX - dragStart.x;
+                transform.y = e.clientY - dragStart.y;
+            } else {
+                // Hover detection
+                let curHover = null;
+                for (let n of nodes) {
+                    if (hideUnresolved && n.type === 'unresolved') continue;
+                    if (isFocusMode && !selectedNodeActivePaths.has(n.id)) continue;
+                    
+                    // If collapsed group, skip secondary nodes
+                    if (n.file && collapsedGroups.has(n.file)) {
+                        const primary = localGroups[n.file] && (localGroups[n.file].find(gn => !isFocusMode || selectedNodeActivePaths.has(gn.id)) || localGroups[n.file][0]);
+                        if (primary !== n) continue;
+                    }
+
+                    const dx = n.x - simMouse.x;
+                    const dy = n.y - simMouse.y;
+                    const dist = Math.sqrt(dx*dx + dy*dy);
+                    if (dist <= n.radius + 5) {
+                        curHover = n;
+                        break;
+                    }
+                }
+                hoveredNode = curHover;
+            }
+        });
+
+        canvas.addEventListener("mouseup", () => {
+            draggedNode = null;
+            isDraggingCanvas = false;
+        });
+
+        canvas.addEventListener("mouseleave", () => {
+            draggedNode = null;
+            isDraggingCanvas = false;
+            mouseSim.x = null;
+            mouseSim.y = null;
+        });
+
+        // Zoom mapping
+        canvas.addEventListener("wheel", (e) => {
+            e.preventDefault();
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            const simMouse = toSimCoords(mouseX, mouseY);
+
+            const zoomFactor = 1.12;
+            const nextK = e.deltaY < 0 ? transform.k * zoomFactor : transform.k / zoomFactor;
+
+            if (nextK < 0.1 || nextK > 10) return;
+
+            transform.x = mouseX - simMouse.x * nextK;
+            transform.y = mouseY - simMouse.y * nextK;
+            transform.k = nextK;
+        }, { passive: false });
+        
+        populateNodeList();
+        if (graphData.selected_node_id) {
+            setTimeout(() => {
+                selectNodeById(graphData.selected_node_id);
+            }, 100);
+        }
+    </script>
+</body>
+</html>
+"""

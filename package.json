@@ -1,0 +1,19 @@
+{
+  "name": "bigi-cli",
+  "version": "0.1.0",
+  "description": "BDB-Genomics Impact Graph CLI wrapper for npx running",
+  "bin": {
+    "bigi": "./bin/bigi.js"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "genomics",
+    "snakemake",
+    "r",
+    "impact-graph"
+  ],
+  "author": "",
+  "license": "MIT"
+}
