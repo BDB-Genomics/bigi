@@ -23,6 +23,7 @@ visualization.html
 out.html
 test.html
 *.html
+!bigi/render/template.html
 
 # Graph exports
 *.graphml
