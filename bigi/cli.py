@@ -17,6 +17,8 @@ import subprocess
 import urllib.request
 import zipfile
 from typing import Optional
+import xml.etree.ElementTree as ET
+from xml.dom import minidom
 
 from .graph import build_graph, save_index, load_index, trace_impact
 from .html_template import HTML_TEMPLATE
@@ -36,6 +38,39 @@ def export_html(graph_data: dict, output_path: str, selected_node_id: Optional[s
     )
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(html_content)
+
+
+def export_graphml(graph_data: dict, output_path: str) -> None:
+    """Export the graph to GraphML format."""
+    root = ET.Element("graphml", xmlns="http://graphml.graphdrawing.org/xmlns")
+    
+    # Define keys for node attributes
+    for key_id, key_type in [("type", "string"), ("name", "string"), ("file", "string")]:
+        ET.SubElement(root, "key", id=key_id, **{"for": "node", "attr.name": key_id, "attr.type": key_type})
+        
+    # Define keys for edge attributes
+    for key_id, key_type in [("type", "string"), ("confidence", "string"), ("label", "string")]:
+        ET.SubElement(root, "key", id=f"e_{key_id}", **{"for": "edge", "attr.name": key_id, "attr.type": key_type})
+        
+    graph_elem = ET.SubElement(root, "graph", id="G", edgedefault="directed")
+    
+    for node_id, node in graph_data.get("nodes", {}).items():
+        n = ET.SubElement(graph_elem, "node", id=node_id)
+        ET.SubElement(n, "data", key="type").text = node.get("type", "")
+        ET.SubElement(n, "data", key="name").text = node.get("name", "")
+        if "file" in node:
+            ET.SubElement(n, "data", key="file").text = node.get("file", "")
+            
+    for i, edge in enumerate(graph_data.get("edges", [])):
+        e = ET.SubElement(graph_elem, "edge", id=f"e{i}", source=edge["source"], target=edge["target"])
+        ET.SubElement(e, "data", key="e_type").text = edge.get("type", "")
+        ET.SubElement(e, "data", key="e_confidence").text = edge.get("confidence", "")
+        if "label" in edge:
+            ET.SubElement(e, "data", key="e_label").text = edge.get("label", "")
+            
+    xmlstr = minidom.parseString(ET.tostring(root)).toprettyxml(indent="  ")
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write(xmlstr)
 
 
 def _cmd_analyze(args: argparse.Namespace) -> int:
@@ -148,8 +183,26 @@ def _cmd_impact(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_export(args: argparse.Namespace) -> int:
+    """Execute the ``export`` sub-command. Returns an exit code."""
+    pipeline_dir: str = args.pipeline_dir
+    output_path: str = args.output
 
+    graph = load_index(pipeline_dir)
+    if graph is None:
+        index_path = os.path.join(pipeline_dir, ".bigi_index.json")
+        print(f"Error: Index not found at '{index_path}'.", file=sys.stderr)
+        print("Please run 'bigi analyze <pipeline_dir>' first to build the index.", file=sys.stderr)
+        return 1
 
+    if output_path.endswith(".graphml"):
+        export_graphml(graph, output_path)
+        print(f"GraphML exported to '{output_path}'.")
+    else:
+        print("Error: Unsupported export format. Please use a file with .graphml extension.", file=sys.stderr)
+        return 1
+
+    return 0
 def main() -> None:
     """Parse CLI arguments and dispatch to the appropriate sub-command."""
     parser = argparse.ArgumentParser(
@@ -159,6 +212,20 @@ def main() -> None:
         )
     )
     subparsers = parser.add_subparsers(dest="command", help="Sub-command to run")
+
+    export_parser = subparsers.add_parser(
+        "export",
+        help="Export the analyzed index to other graph formats (e.g. GraphML).",
+    )
+    export_parser.add_argument(
+        "output",
+        help="Path to export the graph (must end in .graphml).",
+    )
+    export_parser.add_argument(
+        "--pipeline-dir",
+        default=".",
+        help="Path to the pipeline directory containing the built index (default: current directory).",
+    )
 
     analyze_parser = subparsers.add_parser(
         "analyze",
@@ -206,6 +273,7 @@ def main() -> None:
     dispatch = {
         "analyze": _cmd_analyze,
         "impact": _cmd_impact,
+        "export": _cmd_export,
     }
     sys.exit(dispatch[args.command](args))
 

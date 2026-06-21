@@ -1,0 +1,186 @@
+<?xml version="1.0" ?>
+<graphml xmlns="http://graphml.graphdrawing.org/xmlns">
+  <key id="type" for="node" attr.name="type" attr.type="string"/>
+  <key id="name" for="node" attr.name="name" attr.type="string"/>
+  <key id="file" for="node" attr.name="file" attr.type="string"/>
+  <key id="e_type" for="edge" attr.name="type" attr.type="string"/>
+  <key id="e_confidence" for="edge" attr.name="confidence" attr.type="string"/>
+  <key id="e_label" for="edge" attr.name="label" attr.type="string"/>
+  <graph id="G" edgedefault="directed">
+    <node id="rule:raw_data">
+      <data key="type">rule</data>
+      <data key="name">raw_data</data>
+      <data key="file">Snakefile</data>
+    </node>
+    <node id="rule:preprocess">
+      <data key="type">rule</data>
+      <data key="name">preprocess</data>
+      <data key="file">Snakefile</data>
+    </node>
+    <node id="rule:normalise">
+      <data key="type">rule</data>
+      <data key="name">normalise</data>
+      <data key="file">Snakefile</data>
+    </node>
+    <node id="rule:plot_data">
+      <data key="type">rule</data>
+      <data key="name">plot_data</data>
+      <data key="file">Snakefile</data>
+    </node>
+    <node id="function:clean_names@scripts/preprocess.R">
+      <data key="type">function</data>
+      <data key="name">clean_names</data>
+      <data key="file">scripts/preprocess.R</data>
+    </node>
+    <node id="function:log_transform@scripts/preprocess.R">
+      <data key="type">function</data>
+      <data key="name">log_transform</data>
+      <data key="file">scripts/preprocess.R</data>
+    </node>
+    <node id="function:normalize_counts@scripts/normalize.R">
+      <data key="type">function</data>
+      <data key="name">normalize_counts</data>
+      <data key="file">scripts/normalize.R</data>
+    </node>
+    <node id="function:log_transform@scripts/normalize.R">
+      <data key="type">function</data>
+      <data key="name">log_transform</data>
+      <data key="file">scripts/normalize.R</data>
+    </node>
+    <node id="function:generate_heatmap@scripts/plot.R">
+      <data key="type">function</data>
+      <data key="name">generate_heatmap</data>
+      <data key="file">scripts/plot.R</data>
+    </node>
+    <node id="function:log@UNRESOLVED">
+      <data key="type">unresolved</data>
+      <data key="name">log</data>
+      <data key="file">UNRESOLVED</data>
+    </node>
+    <node id="function:read.csv@UNRESOLVED">
+      <data key="type">unresolved</data>
+      <data key="name">read.csv</data>
+      <data key="file">UNRESOLVED</data>
+    </node>
+    <node id="function:write.csv@UNRESOLVED">
+      <data key="type">unresolved</data>
+      <data key="name">write.csv</data>
+      <data key="file">UNRESOLVED</data>
+    </node>
+    <node id="function:png@UNRESOLVED">
+      <data key="type">unresolved</data>
+      <data key="name">png</data>
+      <data key="file">UNRESOLVED</data>
+    </node>
+    <node id="function:plot@UNRESOLVED">
+      <data key="type">unresolved</data>
+      <data key="name">plot</data>
+      <data key="file">UNRESOLVED</data>
+    </node>
+    <node id="function:dev.off@UNRESOLVED">
+      <data key="type">unresolved</data>
+      <data key="name">dev.off</data>
+      <data key="file">UNRESOLVED</data>
+    </node>
+    <edge id="e0" source="rule:raw_data" target="rule:preprocess">
+      <data key="e_type">pipeline_dep</data>
+      <data key="e_confidence">HIGH</data>
+      <data key="e_label">raw.csv</data>
+    </edge>
+    <edge id="e1" source="rule:preprocess" target="rule:normalise">
+      <data key="e_type">pipeline_dep</data>
+      <data key="e_confidence">HIGH</data>
+      <data key="e_label">filtered.csv</data>
+    </edge>
+    <edge id="e2" source="rule:normalise" target="rule:plot_data">
+      <data key="e_type">pipeline_dep</data>
+      <data key="e_confidence">HIGH</data>
+      <data key="e_label">normalized.csv</data>
+    </edge>
+    <edge id="e3" source="function:log@UNRESOLVED" target="function:log_transform@scripts/preprocess.R">
+      <data key="e_type">r_call</data>
+      <data key="e_confidence">UNRESOLVED</data>
+      <data key="e_label">called by</data>
+    </edge>
+    <edge id="e4" source="function:read.csv@UNRESOLVED" target="rule:preprocess">
+      <data key="e_type">r_call</data>
+      <data key="e_confidence">UNRESOLVED</data>
+      <data key="e_label">executed by</data>
+    </edge>
+    <edge id="e5" source="function:clean_names@scripts/preprocess.R" target="rule:preprocess">
+      <data key="e_type">r_call</data>
+      <data key="e_confidence">HIGH</data>
+      <data key="e_label">executed by</data>
+    </edge>
+    <edge id="e6" source="function:log_transform@scripts/preprocess.R" target="rule:preprocess">
+      <data key="e_type">r_call</data>
+      <data key="e_confidence">AMBIGUOUS</data>
+      <data key="e_label">executed by</data>
+    </edge>
+    <edge id="e7" source="function:log_transform@scripts/normalize.R" target="rule:preprocess">
+      <data key="e_type">r_call</data>
+      <data key="e_confidence">AMBIGUOUS</data>
+      <data key="e_label">executed by</data>
+    </edge>
+    <edge id="e8" source="function:write.csv@UNRESOLVED" target="rule:preprocess">
+      <data key="e_type">r_call</data>
+      <data key="e_confidence">UNRESOLVED</data>
+      <data key="e_label">executed by</data>
+    </edge>
+    <edge id="e9" source="function:read.csv@UNRESOLVED" target="rule:normalise">
+      <data key="e_type">r_call</data>
+      <data key="e_confidence">UNRESOLVED</data>
+      <data key="e_label">executed by</data>
+    </edge>
+    <edge id="e10" source="function:normalize_counts@scripts/normalize.R" target="rule:normalise">
+      <data key="e_type">r_call</data>
+      <data key="e_confidence">HIGH</data>
+      <data key="e_label">executed by</data>
+    </edge>
+    <edge id="e11" source="function:log_transform@scripts/preprocess.R" target="rule:normalise">
+      <data key="e_type">r_call</data>
+      <data key="e_confidence">AMBIGUOUS</data>
+      <data key="e_label">executed by</data>
+    </edge>
+    <edge id="e12" source="function:log_transform@scripts/normalize.R" target="rule:normalise">
+      <data key="e_type">r_call</data>
+      <data key="e_confidence">AMBIGUOUS</data>
+      <data key="e_label">executed by</data>
+    </edge>
+    <edge id="e13" source="function:write.csv@UNRESOLVED" target="rule:normalise">
+      <data key="e_type">r_call</data>
+      <data key="e_confidence">UNRESOLVED</data>
+      <data key="e_label">executed by</data>
+    </edge>
+    <edge id="e14" source="function:clean_names@scripts/preprocess.R" target="function:generate_heatmap@scripts/plot.R">
+      <data key="e_type">r_call</data>
+      <data key="e_confidence">HIGH</data>
+      <data key="e_label">called by</data>
+    </edge>
+    <edge id="e15" source="function:png@UNRESOLVED" target="function:generate_heatmap@scripts/plot.R">
+      <data key="e_type">r_call</data>
+      <data key="e_confidence">UNRESOLVED</data>
+      <data key="e_label">called by</data>
+    </edge>
+    <edge id="e16" source="function:plot@UNRESOLVED" target="function:generate_heatmap@scripts/plot.R">
+      <data key="e_type">r_call</data>
+      <data key="e_confidence">UNRESOLVED</data>
+      <data key="e_label">called by</data>
+    </edge>
+    <edge id="e17" source="function:dev.off@UNRESOLVED" target="function:generate_heatmap@scripts/plot.R">
+      <data key="e_type">r_call</data>
+      <data key="e_confidence">UNRESOLVED</data>
+      <data key="e_label">called by</data>
+    </edge>
+    <edge id="e18" source="function:read.csv@UNRESOLVED" target="rule:plot_data">
+      <data key="e_type">r_call</data>
+      <data key="e_confidence">UNRESOLVED</data>
+      <data key="e_label">executed by</data>
+    </edge>
+    <edge id="e19" source="function:generate_heatmap@scripts/plot.R" target="rule:plot_data">
+      <data key="e_type">r_call</data>
+      <data key="e_confidence">HIGH</data>
+      <data key="e_label">executed by</data>
+    </edge>
+  </graph>
+</graphml>
