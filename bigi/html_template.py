@@ -361,6 +361,43 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             display: block;
         }
 
+        /* Left Panel tabbed navigation styling */
+        .left-tabs {
+            display: flex;
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 14px;
+            margin-top: 14px;
+            gap: 4px;
+        }
+        .left-tab-btn {
+            flex: 1;
+            text-align: center;
+            padding: 8px 6px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s ease;
+            user-select: none;
+        }
+        .left-tab-btn:hover {
+            color: var(--text-main);
+        }
+        .left-tab-btn.active {
+            color: var(--highlight-color);
+            border-bottom-color: var(--highlight-color);
+        }
+        .git-item {
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .git-item:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            border-color: rgba(249, 115, 22, 0.4) !important;
+        }
+
         .detail-edge-item {
             display: flex;
             justify-content: space-between;
@@ -467,46 +504,90 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             <div class="subtitle" style="font-size: 0.65rem; color: #6366f1; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 3px;">Cross-Layer Genomic Index</div>
         </div>
 
-        <div class="search-box">
-            <input type="text" id="search-input" placeholder="Search rules or functions...">
-        </div>
-
-        <div>
-            <div class="section-title">Modalities</div>
-            <div class="legend-item">
-                <div class="legend-color color-rule"></div>
-                <span>Pipeline Rule</span>
-            </div>
-            <div class="legend-item">
-                <div class="legend-color color-func"></div>
-                <span>R Function Definition</span>
-            </div>
-            <div class="legend-item">
-                <div class="legend-color color-unres"></div>
-                <span>External / Unresolved</span>
+        <div class="left-tabs">
+            <div id="left-tab-btn-search" class="left-tab-btn active" style="--highlight-color: #818cf8;" onclick="switchLeftTab('search')">🔍 Search</div>
+            <div id="left-tab-btn-git" class="left-tab-btn" style="--highlight-color: #fdba74; position: relative;" onclick="switchLeftTab('git')">
+                🍊 Git Risk
+                <span id="git-changes-badge" style="display: none; background: #f97316; color: white; font-size: 0.58rem; font-weight: bold; padding: 1px 5px; border-radius: 10px; margin-left: 4px; box-shadow: 0 0 5px rgba(249, 115, 22, 0.4);">0</span>
             </div>
         </div>
 
-        <div>
-            <div class="section-title">Filters</div>
-            <div class="legend-item">
-                <input type="checkbox" id="hide-unresolved-cb" checked style="margin-right: 8px; cursor: pointer;">
-                <label for="hide-unresolved-cb" style="cursor: pointer; font-size: 0.8rem; user-select: none;">Hide Unresolved Links</label>
+        <div id="left-content-search" style="display: block;">
+            <div class="search-box">
+                <input type="text" id="search-input" placeholder="Search rules or functions...">
             </div>
-            <div class="legend-item" style="margin-top: 8px;">
-                <input type="checkbox" id="focus-mode-cb" style="margin-right: 8px; cursor: pointer;">
-                <label for="focus-mode-cb" style="cursor: pointer; font-size: 0.8rem; user-select: none; color: #818cf8; font-weight: 500; display: flex; align-items: center; gap: 4px;">🎯 Focus Mode (Selected thread)</label>
+
+            <div>
+                <div class="section-title">Modalities</div>
+                <div class="legend-item">
+                    <div class="legend-color color-rule"></div>
+                    <span>Pipeline Rule</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color color-func"></div>
+                    <span>R Function Definition</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color color-unres"></div>
+                    <span>External / Unresolved</span>
+                </div>
             </div>
-            <div class="legend-item" id="git-filter-container" style="display: none; margin-top: 8px;">
-                <input type="checkbox" id="git-impact-cb" style="margin-right: 8px; cursor: pointer;">
-                <label for="git-impact-cb" style="cursor: pointer; font-size: 0.8rem; user-select: none; color: #fdba74; display: flex; align-items: center; gap: 4px; font-weight: 500;">🍊 Git Changes Impact</label>
+
+            <div>
+                <div class="section-title">Filters</div>
+                <div class="legend-item">
+                    <input type="checkbox" id="hide-unresolved-cb" checked style="margin-right: 8px; cursor: pointer;">
+                    <label for="hide-unresolved-cb" style="cursor: pointer; font-size: 0.8rem; user-select: none;">Hide Unresolved Links</label>
+                </div>
+                <div class="legend-item" style="margin-top: 8px;">
+                    <input type="checkbox" id="focus-mode-cb" style="margin-right: 8px; cursor: pointer;">
+                    <label for="focus-mode-cb" style="cursor: pointer; font-size: 0.8rem; user-select: none; color: #818cf8; font-weight: 500; display: flex; align-items: center; gap: 4px;">🎯 Focus Mode (Selected thread)</label>
+                </div>
+                <div class="legend-item" id="git-filter-container" style="display: none; margin-top: 8px;">
+                    <input type="checkbox" id="git-impact-cb" style="margin-right: 8px; cursor: pointer;">
+                    <label for="git-impact-cb" style="cursor: pointer; font-size: 0.8rem; user-select: none; color: #fdba74; display: flex; align-items: center; gap: 4px; font-weight: 500;">🍊 Git Changes Impact</label>
+                </div>
+            </div>
+
+            <div>
+                <div class="section-title">Index Nodes</div>
+                <div class="node-list-container" id="node-list">
+                    <!-- Populated by JS -->
+                </div>
             </div>
         </div>
 
-        <div>
-            <div class="section-title">Index Nodes</div>
-            <div class="node-list-container" id="node-list">
-                <!-- Populated by JS -->
+        <div id="left-content-git" style="display: none;">
+            <div id="git-dashboard-intro" style="font-size: 0.72rem; color: var(--text-muted); line-height: 1.45; margin-bottom: 12px; padding: 8px; background: rgba(249, 115, 22, 0.05); border: 1px dashed rgba(249, 115, 22, 0.2); border-radius: 6px;">
+                ⚠️ No modified files detected in Git. Modify rules or functions in your repository to calculate downstream risk propagation.
+            </div>
+            
+            <div id="git-dashboard-active" style="display: none;">
+                <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 15px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; background: rgba(0,0,0,0.25); border: 1px solid var(--border-color); padding: 8px 12px; border-radius: 6px;">
+                        <span style="font-size:0.7rem; color: var(--text-muted);">Impact Pruned View:</span>
+                        <div style="display: flex; align-items: center; cursor: pointer;">
+                            <input type="checkbox" id="git-dashboard-toggle-cb" style="cursor: pointer; margin-right: 6px;">
+                            <label for="git-dashboard-toggle-cb" style="font-size: 0.7rem; color: #fdba74; font-weight: 600; cursor: pointer; user-select:none;">Only Show Risk Radius</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section-title" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <span>Modified Entrypoints</span>
+                    <span id="git-modified-count" style="font-size: 0.65rem; padding: 2px 6px; background: rgba(239, 68, 68, 0.2); color: #f87171; border-radius: 10px; font-weight: 700;">0</span>
+                </div>
+                <div id="git-entrypoints-list" style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 15px; max-height: 160px; overflow-y: auto; padding: 2px;">
+                    <!-- Populated by JS -->
+                </div>
+
+                <div class="section-title" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <span>Downstream Blast Radius</span>
+                    <span id="git-impacted-count" style="font-size: 0.65rem; padding: 2px 6px; background: rgba(249, 115, 22, 0.2); color: #fdba74; border-radius: 10px; font-weight: 700;">0</span>
+                </div>
+                <div id="git-impacted-list" style="display: flex; flex-direction: column; gap: 6px; max-height: 240px; overflow-y: auto; padding: 2px;">
+                    <!-- Populated by JS -->
+                </div>
             </div>
         </div>
     </div>
@@ -636,15 +717,37 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
         function calculateGitImpact() {
             const modifiedIds = [];
+            let gitModifiedCount = 0;
             nodes.forEach(n => {
                 if (n.git_modified) {
                     modifiedIds.push(n.id);
                     hasGitChanges = true;
+                    gitModifiedCount++;
                 }
             });
 
             if (hasGitChanges) {
                 document.getElementById("git-filter-container").style.display = "flex";
+                const badge = document.getElementById("git-changes-badge");
+                if (badge) {
+                    badge.style.display = "inline-flex";
+                    badge.textContent = gitModifiedCount;
+                }
+                const dashIntro = document.getElementById("git-dashboard-intro");
+                const dashActive = document.getElementById("git-dashboard-active");
+                if (dashIntro && dashActive) {
+                    dashIntro.style.display = "none";
+                    dashActive.style.display = "block";
+                }
+            } else {
+                const badge = document.getElementById("git-changes-badge");
+                if (badge) badge.style.display = "none";
+                const dashIntro = document.getElementById("git-dashboard-intro");
+                const dashActive = document.getElementById("git-dashboard-active");
+                if (dashIntro && dashActive) {
+                    dashIntro.style.display = "block";
+                    dashActive.style.display = "none";
+                }
             }
 
             const adj = {};
@@ -674,6 +777,107 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             gitImpactNodes = new Set(Object.keys(gitRiskScores));
         }
         calculateGitImpact();
+
+        // Left Panel Tab Switching
+        function switchLeftTab(tabId) {
+            document.querySelectorAll('.left-tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.getElementById(`left-tab-btn-${tabId}`).classList.add('active');
+            
+            if (tabId === 'search') {
+                document.getElementById('left-content-search').style.display = 'block';
+                document.getElementById('left-content-git').style.display = 'none';
+            } else {
+                document.getElementById('left-content-search').style.display = 'none';
+                document.getElementById('left-content-git').style.display = 'block';
+                populateGitDashboard();
+            }
+        }
+
+        // Populate Git Risk / Blast Radius Dashboard
+        function populateGitDashboard() {
+            const entrypointList = document.getElementById("git-entrypoints-list");
+            const impactedList = document.getElementById("git-impacted-list");
+            if (!entrypointList || !impactedList) return;
+
+            entrypointList.innerHTML = "";
+            impactedList.innerHTML = "";
+
+            const modifiedNodes = [];
+            const impactedNodes = [];
+
+            nodes.forEach(n => {
+                if (n.git_modified) {
+                    modifiedNodes.push(n);
+                } else if (gitImpactNodes.has(n.id)) {
+                    impactedNodes.push(n);
+                }
+            });
+
+            // Sort lists
+            modifiedNodes.sort((a, b) => a.name.localeCompare(b.name));
+            impactedNodes.sort((a, b) => {
+                const distA = gitRiskScores[a.id] || 999;
+                const distB = gitRiskScores[b.id] || 999;
+                if (distA !== distB) return distA - distB;
+                return a.name.localeCompare(b.name);
+            });
+
+            // Update header counts
+            document.getElementById("git-modified-count").textContent = modifiedNodes.length;
+            document.getElementById("git-impacted-count").textContent = impactedNodes.length;
+
+            if (modifiedNodes.length === 0) {
+                entrypointList.innerHTML = `<div style="color:var(--text-muted); font-size:0.65rem; text-align:center; padding:10px;">No entrypoints</div>`;
+            } else {
+                modifiedNodes.forEach(n => {
+                    const item = document.createElement("div");
+                    item.className = "git-item";
+                    item.style.cssText = "background: rgba(239, 68, 68, 0.05); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 6px; padding: 8px; cursor: pointer; transition: all 0.15s ease; margin-bottom: 4px;";
+                    item.innerHTML = `
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 3px;">
+                            <span style="font-weight: 600; font-size: 0.72rem; color: #f3f4f6;">\${n.name}</span>
+                            <span style="font-size:0.55rem; text-transform:uppercase; padding: 1px 4px; border-radius: 4px; background: rgba(239, 68, 68, 0.2); color: #f87171; font-weight:700;">\${n.type}</span>
+                        </div>
+                        <div style="font-size:0.6rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">📁 \${n.file || "No file info"}</div>
+                    `;
+                    item.onclick = () => window.selectNodeById(n.id);
+                    entrypointList.appendChild(item);
+                });
+            }
+
+            if (impactedNodes.length === 0) {
+                impactedList.innerHTML = `<div style="color:var(--text-muted); font-size:0.65rem; text-align:center; padding:10px;">No downstream impact</div>`;
+            } else {
+                impactedNodes.forEach(n => {
+                    const dist = gitRiskScores[n.id];
+                    let degreeText = `\${dist}th Degree`;
+                    let badgeColor = "rgba(234, 179, 8, 0.2)";
+                    let textColor = "#fde047";
+                    if (dist === 1) {
+                        degreeText = "1st Degree Direct";
+                        badgeColor = "rgba(249, 115, 22, 0.2)";
+                        textColor = "#fdba74";
+                    } else if (dist === 2) {
+                        degreeText = "2nd Degree Secondary";
+                        badgeColor = "rgba(234, 179, 8, 0.15)";
+                        textColor = "#fef08a";
+                    }
+
+                    const item = document.createElement("div");
+                    item.className = "git-item";
+                    item.style.cssText = "background: rgba(249, 115, 22, 0.03); border: 1px solid rgba(249, 115, 22, 0.15); border-radius: 6px; padding: 8px; cursor: pointer; transition: all 0.15s ease; margin-bottom: 4px;";
+                    item.innerHTML = `
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 3px;">
+                            <span style="font-weight: 600; font-size: 0.72rem; color: #e2e8f0;">\${n.name}</span>
+                            <span style="font-size:0.55rem; padding: 1px 4px; border-radius: 4px; background: \${badgeColor}; color: \${textColor}; font-weight:700;">\${degreeText}</span>
+                        </div>
+                        <div style="font-size:0.6rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">📁 \${n.file || "No file info"}</div>
+                    `;
+                    item.onclick = () => window.selectNodeById(n.id);
+                    impactedList.appendChild(item);
+                });
+            }
+        }
 
         function computeActivePaths(node) {
             selectedNodeActivePaths.clear();
@@ -1070,9 +1274,22 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
         document.getElementById("git-impact-cb").addEventListener("change", (e) => {
             gitImpactOnly = e.target.checked;
+            const dashToggle = document.getElementById("git-dashboard-toggle-cb");
+            if (dashToggle) dashToggle.checked = e.target.checked;
             populateNodeList(document.getElementById("search-input").value);
             draw();
         });
+
+        const dashToggle = document.getElementById("git-dashboard-toggle-cb");
+        if (dashToggle) {
+            dashToggle.addEventListener("change", (e) => {
+                const gitImpactCb = document.getElementById("git-impact-cb");
+                if (gitImpactCb) {
+                    gitImpactCb.checked = e.target.checked;
+                    gitImpactCb.dispatchEvent(new Event("change"));
+                }
+            });
+        }
 
         // Pause / Play Physics
         const pauseBtn = document.getElementById("btn-pause");
