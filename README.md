@@ -6,6 +6,9 @@
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/BDB-Genomics/BiGI)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FBDB-Genomics%2FBiGI%2Ftree%2Fmain%2Fweb)
+
 <img src="assets/bigi_hero.jpg" width="800" alt="BiGI Futuristic Blast Radius Graph">
 
 > **"What breaks if I change this code?"**  
