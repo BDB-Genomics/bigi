@@ -183,6 +183,26 @@ When integrated into a CI/CD pipeline (see `.github/workflows/pr_blast_radius.ym
 - **GraphML Export Capability**: Added `bigi export <file>.graphml` to generate standardized XML graph files for external network analysis.
 - **Premium Visualization Redesign**: Stripped away generic gradients and glassmorphism from the HTML export, replacing it with a sleek, minimalist hacker aesthetic (solid `#0a0a0a` backgrounds, sharp `#00e5ff`/`#ff00aa` neon accents, JetBrains Mono font).
 - **Physics Simulation Control Fix**: Corrected the WASM physics engine so the pause/resume simulation button now accurately halts the layout calculations.
+
+---
+
+## Future Roadmap & Vision
+
+We are actively expanding BiGI from a simple dependency mapper into a full-scale **Universal Pipeline Intelligence Platform**. Here are the major architectural features planned for the future, applicable across all supported languages (Python, R, Rust, Go, C++, JS, Bash) and orchestrators (Snakemake, Nextflow):
+
+### 1. Data Schema & Content Type Validation Nodes
+Right now, the graph connects pipeline rules to their internal functions. In the future, we will model the **data structures themselves** as nodes. By statically analyzing the data manipulation logic across the codebase, BiGI will infer the expected schemas (e.g., column names in a CSV/Parquet). If a `preprocess` step outputs a dataset with a `sample_id` column, but a downstream downstream model expects `id`, the graph will flag a **Schema Mismatch Warning** before you ever waste compute running the pipeline.
+
+### 2. Computational Bottleneck Overlay (Telemetry Integration)
+By ingesting execution logs and benchmarks from orchestrators, BiGI will project performance telemetry directly onto the visual graph. Developers will be able to toggle a "Performance View" where nodes are sized dynamically by RAM consumption and colored by execution time. This will instantly highlight algorithmic bottlenecks and inefficient scripts within massively parallel workflows.
+
+### 3. Container & Environment Dependency Graphing
+Modern pipelines rely on tightly coupled environments (Docker containers, Conda `.yaml` files). BiGI will parse these environment definitions and inject them as global nodes into the graph. If you want to know, *"What breaks if I upgrade Pandas from 1.5 to 2.0?"*, the graph will instantly trace from the environment node down to every specific script and rule that imports or relies on that dependency, proactively preventing version-bump breakages.
+
+### 4. Interactive "Cypher" Graph Query Engine
+Instead of just a visual search bar or static CLI queries, we plan to embed a fully-fledged graph query language interface (similar to Neo4j's Cypher) directly into the UI. Pipeline engineers will be able to programmatically audit massive enterprise architectures with queries like:
+`MATCH (r:Rule)-[*]->(f:Function) WHERE f.language='rust' RETURN r`
+This will unlock unparalleled compliance auditing, refactoring analysis, and architectural governance.
 - **Exponential DFS Traversal Fix**: Resolved a performance issue where the impact traversal explored all paths redundantly, which would cause the tool to hang on complex pipelines.
 - **Python `async def` Support**: The Python AST parser now correctly captures asynchronous functions.
 - **WASM Memory Safety**: Added array bounds checking for JS-provided link indices inside the Rust physics engine to prevent memory out-of-bounds crashes, and implemented `wrapping_abs` in the hash grid to avoid integer overflow.
