@@ -12,10 +12,10 @@ import subprocess
 import re
 from typing import Optional
 
-from .parser_pipeline import parse_pipeline
-from .parser_nextflow import parse_nextflow_pipeline
-from .parser_python import parse_python_directory
-from .parser_generic import parse_generic_directory
+from .parsers.snakemake import parse_pipeline
+from .parsers.nextflow import parse_nextflow_pipeline
+from .parsers.python import parse_python_directory
+from .parsers.generic import parse_generic_directory
 from .constants import R_BUILTINS
 
 
@@ -176,7 +176,7 @@ def build_graph(pipeline_dir: str) -> dict:
         }
 
     # 2. Parse R scripts (definitions and calls)
-    parser_r_path = os.path.join(os.path.dirname(__file__), "parser_r.R")
+    parser_r_path = os.path.join(os.path.dirname(__file__), "parsers", "r_parser.R")
     r_data: dict = {"definitions": [], "calls": []}
     
     # Fast Python-based directory walk for R scripts with folder pruning

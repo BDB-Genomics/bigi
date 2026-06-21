@@ -21,7 +21,7 @@ import xml.etree.ElementTree as ET
 from xml.dom import minidom
 
 from .graph import build_graph, save_index, load_index, trace_impact
-from .html_template import HTML_TEMPLATE
+from .render.html_template import HTML_TEMPLATE
 
 
 def export_html(graph_data: dict, output_path: str, selected_node_id: Optional[str] = None) -> None:
