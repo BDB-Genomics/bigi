@@ -1393,67 +1393,189 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
             if (!isSimulating) return;
 
-            // Repulsion forces between nodes (skip unresolved if hidden)
+            // Pre-filter active nodes once to avoid O(N^2) conditional checks inside nested loop
+            const activeNodes = [];
             for (let i = 0; i < nodes.length; i++) {
-                if (hideUnresolved && nodes[i].type === 'unresolved') continue;
-                if (isFocusMode && !selectedNodeActivePaths.has(nodes[i].id)) continue;
-                // Exclude collapsed secondary nodes
-                if (nodes[i].width < 1.0) continue;
-                
-                for (let j = i + 1; j < nodes.length; j++) {
-                    if (hideUnresolved && nodes[j].type === 'unresolved') continue;
-                    if (isFocusMode && !selectedNodeActivePaths.has(nodes[j].id)) continue;
-                    if (nodes[j].width < 1.0) continue;
-                    
-                    let dx = nodes[j].x - nodes[i].x;
-                    let dy = nodes[j].y - nodes[i].y;
-                    if (dx === 0) dx = 0.1;
-                    let dist = Math.sqrt(dx*dx + dy*dy);
-                    if (dist < 1) dist = 1;
+                const n = nodes[i];
+                if (hideUnresolved && n.type === 'unresolved') continue;
+                if (isFocusMode && !selectedNodeActivePaths.has(n.id)) continue;
+                if (n.width < 1.0) continue;
+                activeNodes.push(n);
+            }
 
-                    // 1. Smooth repulsion force (increased strength for wider default layout)
-                    let strength = 950;
-                    let force = strength / (dist * dist);
+            // Repulsion forces between nodes
+            if (activeNodes.length <= 150) {
+                // Low overhead O(N^2) loop for small graphs (maintains absolute precision and layout characteristics)
+                for (let i = 0; i < activeNodes.length; i++) {
+                    const nodeI = activeNodes[i];
+                    nodeI.index = i;
                     
-                    if (dist < 55) {
-                        force += (55 - dist) * 0.85; // buffer zone
+                    for (let j = i + 1; j < activeNodes.length; j++) {
+                        const nodeJ = activeNodes[j];
+                        
+                        let dx = nodeJ.x - nodeI.x;
+                        let dy = nodeJ.y - nodeI.y;
+                        let distSq = dx*dx + dy*dy;
+                        
+                        if (distSq > 90000) continue; // 300px threshold
+                        
+                        let dist = Math.sqrt(distSq);
+                        if (dist < 1) dist = 1;
+
+                        let strength = 950;
+                        let force = strength / distSq;
+                        
+                        if (dist < 55) {
+                            force += (55 - dist) * 0.85;
+                        }
+
+                        let fx = (dx / dist) * force;
+                        let fy = (dy / dist) * force;
+
+                        nodeI.vx -= fx;
+                        nodeI.vy -= fy;
+                        nodeJ.vx += fx;
+                        nodeJ.vy += fy;
+
+                        // AABB Collision Solver
+                        const hWidthI = nodeI.width / 2;
+                        const hHeightI = nodeI.height / 2;
+                        const hWidthJ = nodeJ.width / 2;
+                        const hHeightJ = nodeJ.height / 2;
+                        const padX = 14;
+                        const padY = 12;
+                        const minDistanceX = hWidthI + hWidthJ + padX;
+                        const minDistanceY = hHeightI + hHeightJ + padY;
+
+                        const overlapX = minDistanceX - Math.abs(dx);
+                        const overlapY = minDistanceY - Math.abs(dy);
+
+                        if (overlapX > 0 && overlapY > 0) {
+                            if (overlapX < overlapY) {
+                                const sign = dx > 0 ? 1 : -1;
+                                const pushForce = overlapX * 0.12 * sign;
+                                nodeI.vx -= pushForce;
+                                nodeJ.vx += pushForce;
+                            } else {
+                                const sign = dy > 0 ? 1 : -1;
+                                const pushForce = overlapY * 0.12 * sign;
+                                nodeI.vy -= pushForce;
+                                nodeJ.vy += pushForce;
+                            }
+                        }
                     }
+                }
+            } else {
+                // High-performance Flat Array Spatial Hash Grid for large graphs (O(N) complexity scaling)
+                const cellSize = 220; // Cells matching typical capsule bounds (150px) + margin
+                let minX = Infinity, maxX = -Infinity;
+                let minY = Infinity, maxY = -Infinity;
+                
+                for (let i = 0; i < activeNodes.length; i++) {
+                    const n = activeNodes[i];
+                    n.index = i; // Assign integer index for lookup safety
+                    if (n.x < minX) minX = n.x;
+                    if (n.x > maxX) maxX = n.x;
+                    if (n.y < minY) minY = n.y;
+                    if (n.y > maxY) maxY = n.y;
+                }
+                
+                minX -= 10;
+                minY -= 10;
+                
+                const cols = Math.ceil((maxX - minX) / cellSize) + 2;
+                const rows = Math.ceil((maxY - minY) / cellSize) + 2;
+                const grid = new Array(cols * rows);
+                
+                // Populate grid cells
+                for (let i = 0; i < activeNodes.length; i++) {
+                    const n = activeNodes[i];
+                    const col = Math.floor((n.x - minX) / cellSize);
+                    const row = Math.floor((n.y - minY) / cellSize);
+                    const cellIdx = col + row * cols;
+                    if (!grid[cellIdx]) {
+                        grid[cellIdx] = [];
+                    }
+                    grid[cellIdx].push(n);
+                    n.col = col;
+                    n.row = row;
+                }
 
-                    let fx = (dx / dist) * force;
-                    let fy = (dy / dist) * force;
-
-                    nodes[i].vx -= fx;
-                    nodes[i].vy -= fy;
-                    nodes[j].vx += fx;
-                    nodes[j].vy += fy;
-
-                    // 2. Hard Axis-Aligned Bounding Box (AABB) Collision Solver to completely prevent overlaps
-                    const hWidthI = nodes[i].width / 2;
-                    const hHeightI = nodes[i].height / 2;
-                    const hWidthJ = nodes[j].width / 2;
-                    const hHeightJ = nodes[j].height / 2;
-
-                    const padX = 14; // Horizontal safety buffer between node capsules
-                    const padY = 12; // Vertical safety buffer between node capsules
+                // Calculate forces via neighbor grid cell lookup (9 cells per node)
+                for (let i = 0; i < activeNodes.length; i++) {
+                    const nodeI = activeNodes[i];
+                    const col = nodeI.col;
+                    const row = nodeI.row;
                     
-                    const minDistanceX = hWidthI + hWidthJ + padX;
-                    const minDistanceY = hHeightI + hHeightJ + padY;
+                    for (let dRow = -1; dRow <= 1; dRow++) {
+                        const r = row + dRow;
+                        if (r < 0 || r >= rows) continue;
+                        const rowOffset = r * cols;
+                        
+                        for (let dCol = -1; dCol <= 1; dCol++) {
+                            const c = col + dCol;
+                            if (c < 0 || c >= cols) continue;
+                            
+                            const cellIdx = c + rowOffset;
+                            const cellNodes = grid[cellIdx];
+                            if (!cellNodes) continue;
+                            
+                            for (let j = 0; j < cellNodes.length; j++) {
+                                const nodeJ = cellNodes[j];
+                                if (nodeI.index >= nodeJ.index) continue; // Avoid double counting
+                                
+                                let dx = nodeJ.x - nodeI.x;
+                                let dy = nodeJ.y - nodeI.y;
+                                let distSq = dx*dx + dy*dy;
+                                
+                                // Skip if beyond 220px boundary
+                                if (distSq > 48400) continue;
+                                
+                                let dist = Math.sqrt(distSq);
+                                if (dist < 1) dist = 1;
 
-                    const overlapX = minDistanceX - Math.abs(dx);
-                    const overlapY = minDistanceY - Math.abs(dy);
+                                let strength = 950;
+                                let force = strength / distSq;
+                                
+                                if (dist < 55) {
+                                    force += (55 - dist) * 0.85;
+                                }
 
-                    if (overlapX > 0 && overlapY > 0) {
-                        // Resolve overlaps by applying velocity-based push along minimum penetration axis to guarantee simulation stability
-                        if (overlapX < overlapY) {
-                            const sign = dx > 0 ? 1 : -1;
-                            const pushForce = overlapX * 0.12 * sign;
-                            nodes[i].vx -= pushForce;
-                            nodes[j].vx += pushForce;
-                        } else {
-                            const sign = dy > 0 ? 1 : -1;
-                            const pushForce = overlapY * 0.12 * sign;
-                            nodes[i].vy -= pushForce;
-                            nodes[j].vy += pushForce;
+                                let fx = (dx / dist) * force;
+                                let fy = (dy / dist) * force;
+
+                                nodeI.vx -= fx;
+                                nodeI.vy -= fy;
+                                nodeJ.vx += fx;
+                                nodeJ.vy += fy;
+
+                                // AABB Collision Solver
+                                const hWidthI = nodeI.width / 2;
+                                const hHeightI = nodeI.height / 2;
+                                const hWidthJ = nodeJ.width / 2;
+                                const hHeightJ = nodeJ.height / 2;
+                                const padX = 14;
+                                const padY = 12;
+                                const minDistanceX = hWidthI + hWidthJ + padX;
+                                const minDistanceY = hHeightI + hHeightJ + padY;
+
+                                const overlapX = minDistanceX - Math.abs(dx);
+                                const overlapY = minDistanceY - Math.abs(dy);
+
+                                if (overlapX > 0 && overlapY > 0) {
+                                    if (overlapX < overlapY) {
+                                        const sign = dx > 0 ? 1 : -1;
+                                        const pushForce = overlapX * 0.12 * sign;
+                                        nodeI.vx -= pushForce;
+                                        nodeJ.vx += pushForce;
+                                    } else {
+                                        const sign = dy > 0 ? 1 : -1;
+                                        const pushForce = overlapY * 0.12 * sign;
+                                        nodeI.vy -= pushForce;
+                                        nodeJ.vy += pushForce;
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -1522,8 +1644,26 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 n.vx += dx * 0.001; // Dampened from 0.0035 to 0.001 so nodes disperse naturally
                 n.vy += dy * 0.001;
 
+                // Velocity cap to prevent numerical simulation explosion
+                const maxSpeed = 30;
+                const speed = Math.sqrt(n.vx * n.vx + n.vy * n.vy);
+                if (speed > maxSpeed) {
+                    n.vx = (n.vx / speed) * maxSpeed;
+                    n.vy = (n.vy / speed) * maxSpeed;
+                }
+
                 n.vx *= 0.72; // friction decay
                 n.vy *= 0.72;
+
+                // Guard against NaN values
+                if (isNaN(n.vx) || isNaN(n.vy)) {
+                    n.vx = 0;
+                    n.vy = 0;
+                }
+                if (isNaN(n.x) || isNaN(n.y)) {
+                    n.x = width / 2 + (Math.random() - 0.5) * 200;
+                    n.y = height / 2 + (Math.random() - 0.5) * 200;
+                }
 
                 if (n !== draggedNode) {
                     n.x += n.vx;
@@ -1591,6 +1731,16 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
             ctx.translate(transform.x, transform.y);
             ctx.scale(transform.k, transform.k);
 
+            // Viewport Frustum Culling bounds calculation in simulation coordinates
+            const tl = toSimCoords(0, 0);
+            const br = toSimCoords(width, height);
+            
+            // Add safety margin (e.g. 150px) around visible simulation area
+            const minSimX = tl.x - 150;
+            const maxSimX = br.x + 150;
+            const minSimY = tl.y - 150;
+            const maxSimY = br.y + 150;
+
             const hideUnresolved = document.getElementById("hide-unresolved-cb").checked;
             const gitImpactCb = document.getElementById("git-impact-cb");
             const gitImpactOnly = gitImpactCb ? gitImpactCb.checked : false;
@@ -1626,6 +1776,9 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 });
                 
                 if (minX === Infinity) return; // Skip if no nodes visible in focus mode
+                
+                // Viewport culling check: skip group folder card if completely off-screen
+                if (maxX < minSimX || minX > maxSimX || maxY < minSimY || minY > maxSimY) return;
                 
                 // Hide or dim visual clustering cards if they do not match search query
                 const matchesSearch = !search || filename.toLowerCase().includes(search) || groupNodes.some(n => n.name.toLowerCase().includes(search));
@@ -1684,9 +1837,27 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 if (hideUnresolved && (s.type === 'unresolved' || t.type === 'unresolved')) return;
                 if (isFocusMode && (!activePaths.has(l.source) || !activePaths.has(l.target))) return;
 
+                // Viewport culling check: skip link if both endpoints are off-screen
+                const sVisible = s.x >= minSimX && s.x <= maxSimX && s.y >= minSimY && s.y <= maxSimY;
+                const tVisible = t.x >= minSimX && t.x <= maxSimX && t.y >= minSimY && t.y <= maxSimY;
+                if (!sVisible && !tVisible) return;
+
                 const matchesSearch = nodeMatchesSearch(s) || nodeMatchesSearch(t);
                 const isLinkHighlighted = matchesSearch && (!selectedNode || activeLinks.has(l)) && (!gitImpactOnly || (gitImpactNodes.has(l.source) && gitImpactNodes.has(l.target)));
                 const edgeOpacity = isLinkHighlighted ? 1.0 : 0.04;
+
+                const isLinkSelected = selectedNode && (selectedNode.id === s.id || selectedNode.id === t.id);
+                
+                if (transform.k < 0.22 && !isLinkSelected) {
+                    // Straight lines without gradients/curves when zoomed out for extreme rendering speedups
+                    ctx.beginPath();
+                    ctx.moveTo(s.x, s.y);
+                    ctx.lineTo(t.x, t.y);
+                    ctx.strokeStyle = isLinkHighlighted ? "rgba(165, 180, 252, 0.15)" : "rgba(255, 255, 255, 0.035)";
+                    ctx.lineWidth = 0.6;
+                    ctx.stroke();
+                    return;
+                }
 
                 // Calculate curved control point (quadratic Bezier) to prevent straight line overlaps
                 let dx = t.x - s.x;
@@ -1704,8 +1875,6 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 // Define node type colors for gradients
                 let sColor = s.type === 'rule' ? '#6366f1' : s.type === 'unresolved' ? '#f43f5e' : '#10b981';
                 let tColor = t.type === 'rule' ? '#6366f1' : t.type === 'unresolved' ? '#f43f5e' : '#10b981';
-                
-                const isLinkSelected = selectedNode && (selectedNode.id === s.id || selectedNode.id === t.id);
                 
                 ctx.beginPath();
                 ctx.moveTo(s.x, s.y);
@@ -1804,11 +1973,20 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                 if (hideUnresolved && (s.type === 'unresolved' || t.type === 'unresolved')) return;
                 if (isFocusMode && (!activePaths.has(l.source) || !activePaths.has(l.target))) return;
 
+                // Viewport culling check: skip link pulse if both endpoints are off-screen
+                const sVisible = s.x >= minSimX && s.x <= maxSimX && s.y >= minSimY && s.y <= maxSimY;
+                const tVisible = t.x >= minSimX && t.x <= maxSimX && t.y >= minSimY && t.y <= maxSimY;
+                if (!sVisible && !tVisible) return;
+
                 const matchesSearch = !search || s.name.toLowerCase().includes(search) || t.name.toLowerCase().includes(search);
                 const isLinkHighlighted = matchesSearch && (!selectedNode || activeLinks.has(l));
                 
                 // Prune pulse indicators on non-highlighted links for clean presentation
                 if (!isLinkHighlighted) return;
+
+                // Skip pulse animation when zoomed out to conserve GPU/CPU rendering resources
+                const isLinkSelected = selectedNode && (selectedNode.id === s.id || selectedNode.id === t.id);
+                if (transform.k < 0.22 && !isLinkSelected) return;
 
                 let dx = t.x - s.x;
                 let dy = t.y - s.y;
@@ -1854,6 +2032,9 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
                     const primary = groups[n.file] && (groups[n.file].find(gn => !isFocusMode || activePaths.has(gn.id)) || groups[n.file][0]);
                     if (primary !== n) return; // Skip drawing secondary collapsed nodes
                 }
+
+                // Viewport culling check: skip node if it is off-screen
+                if (n.x < minSimX || n.x > maxSimX || n.y < minSimY || n.y > maxSimY) return;
 
                 const isSelected = selectedNode && selectedNode.id === n.id;
                 const isHovered = hoveredNode && hoveredNode.id === n.id;
