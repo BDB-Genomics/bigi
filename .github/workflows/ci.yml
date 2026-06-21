@@ -55,4 +55,4 @@ jobs:
     # 6. Run Test Pipeline compilation
     - name: Test compile visualization on test_pipeline
       run: |
-        bigi analyze test_pipeline --html test_pipeline/visualization.html
+        bigi analyze tests/test_pipeline --html tests/test_pipeline/visualization.html
