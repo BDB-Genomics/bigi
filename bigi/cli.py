@@ -318,11 +318,33 @@ def main() -> None:
 
 
     args_list = sys.argv[1:]
-    if not args_list:
-        parser.print_help()
+    if len(sys.argv) == 1:
+        parser.print_help(sys.stderr)
         sys.exit(1)
 
-    args = parser.parse_args(args_list)
+    args = parser.parse_args()
+
+    # Automatically clone remote git repositories
+    if hasattr(args, "pipeline_dir"):
+        pdir = args.pipeline_dir
+        if pdir.startswith("http://") or pdir.startswith("https://") or pdir.startswith("git@"):
+            import subprocess
+            repo_name = pdir.rstrip("/").split("/")[-1]
+            if repo_name.endswith(".git"):
+                repo_name = repo_name[:-4]
+            local_dir = os.path.join(os.getcwd(), repo_name)
+            
+            if not os.path.exists(local_dir):
+                print(f"Cloning remote repository '{pdir}' into './{repo_name}'...")
+                try:
+                    subprocess.run(["git", "clone", pdir, local_dir], check=True)
+                except subprocess.CalledProcessError:
+                    print(f"Error: Failed to clone repository '{pdir}'.", file=sys.stderr)
+                    sys.exit(1)
+            else:
+                print(f"Using existing local repository at './{repo_name}' for '{pdir}'")
+            
+            args.pipeline_dir = local_dir
 
     if not args.command:
         parser.print_help()
