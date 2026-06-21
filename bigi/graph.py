@@ -522,3 +522,85 @@ def trace_impact(graph: dict, name: str) -> Optional[list[str]]:
         results.append("")
 
     return results
+
+def stitch_graphs(graphs: list[dict]) -> dict:
+    """Stitch multiple repository graphs into a single Meta-Graph.
+    
+    Namespaces node IDs by repository to prevent collisions, and creates cross-repo
+    edges by matching unresolved function calls and data inputs/outputs across repos.
+    """
+    meta_nodes = {}
+    meta_edges = []
+    
+    for i, g in enumerate(graphs):
+        pdir = g.get("pipeline_dir", f"repo_{i}")
+        repo_name = os.path.basename(os.path.normpath(pdir))
+        if not repo_name:
+            repo_name = f"repo_{i}"
+            
+        id_map = {}
+        for old_id, node in g.get("nodes", {}).items():
+            new_id = f"{repo_name}::{old_id}"
+            id_map[old_id] = new_id
+            
+            new_node = dict(node)
+            new_node["id"] = new_id
+            new_node["repo"] = repo_name
+            # Prefix the display name with the repo for clarity in the UI
+            new_node["name"] = f"[{repo_name}] {node.get('name', '')}"
+            meta_nodes[new_id] = new_node
+            
+        for edge in g.get("edges", []):
+            new_edge = dict(edge)
+            if edge["source"] in id_map:
+                new_edge["source"] = id_map[edge["source"]]
+            if edge["target"] in id_map:
+                new_edge["target"] = id_map[edge["target"]]
+            meta_edges.append(new_edge)
+            
+    # Cross-Repo stitching: functions
+    unresolved = [n for n in meta_nodes.values() if n.get("type") == "unresolved"]
+    defined_funcs = [n for n in meta_nodes.values() if n.get("type") == "function" and "UNRESOLVED" not in n.get("id")]
+    
+    for unres in unresolved:
+        # Check against all defined functions (strip the repo prefix we just added)
+        # new_node["name"] looks like "[repoA] my_func"
+        # original name was unres["name"]. Wait, unres original name is lost because we did new_node["name"] = ...
+        # Let's rely on the original name we didn't override, or extract it.
+        # Actually, let's look at the id: "repoA::function:my_func@UNRESOLVED"
+        # We can extract the raw name from the id.
+        raw_unres_name = unres["id"].split("::function:")[1].split("@")[0]
+        for df in defined_funcs:
+            raw_df_name = df["id"].split("::function:")[1].split("@")[0]
+            if raw_unres_name == raw_df_name and unres["repo"] != df["repo"]:
+                for edge in meta_edges:
+                    if edge["source"] == unres["id"]:
+                        meta_edges.append({
+                            "source": df["id"],
+                            "target": edge["target"],
+                            "type": "cross_repo_call",
+                            "confidence": "MEDIUM",
+                            "label": f"cross-repo call to {df['repo']}",
+                            "detail": f"Resolved across repositories: {unres['repo']} -> {df['repo']}"
+                        })
+                        
+    # Cross-Repo stitching: data pipelines
+    rules = [n for n in meta_nodes.values() if n.get("type") == "rule"]
+    for rule_a in rules:
+        for rule_b in rules:
+            if rule_a["repo"] == rule_b["repo"]:
+                continue
+            for out in rule_a.get("outputs", []):
+                for inp in rule_b.get("inputs", []):
+                    # Match by basename for cross-repo dependencies
+                    if os.path.basename(out) == os.path.basename(inp):
+                        meta_edges.append({
+                            "source": rule_a["id"],
+                            "target": rule_b["id"],
+                            "type": "cross_repo_dep",
+                            "confidence": "MEDIUM",
+                            "label": f"cross-repo data link",
+                            "detail": f"Matched output {os.path.basename(out)} to input {os.path.basename(inp)} across {rule_a['repo']} and {rule_b['repo']}"
+                        })
+                        
+    return {"nodes": meta_nodes, "edges": meta_edges, "pipeline_dir": "meta_graph"}

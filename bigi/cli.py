@@ -20,7 +20,7 @@ from typing import Optional
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
 
-from .graph import build_graph, save_index, load_index, trace_impact
+from .graph import build_graph, save_index, load_index, trace_impact, stitch_graphs
 from .render.html_template import HTML_TEMPLATE
 
 
@@ -73,75 +73,81 @@ def export_graphml(graph_data: dict, output_path: str) -> None:
         f.write(xmlstr)
 
 
+def _fetch_pipeline_dir(pdir: str, temp_dirs: list) -> str:
+    """Clones a URL into a temporary directory if needed."""
+    is_url = pdir.startswith(("http://", "https://", "git@", "git://"))
+    if not is_url:
+        if not os.path.exists(pdir):
+            raise FileNotFoundError(f"Pipeline directory '{pdir}' does not exist.")
+        return pdir
+
+    print(f"Detected remote URL: {pdir}")
+    temp_dir_obj = tempfile.TemporaryDirectory()
+    temp_dirs.append(temp_dir_obj)
+    target_dir = temp_dir_obj.name
+
+    if pdir.endswith(".zip"):
+        print(f"Downloading zip archive from {pdir}...")
+        zip_path = os.path.join(target_dir, "archive.zip")
+        urllib.request.urlretrieve(pdir, zip_path)
+        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+            zip_ref.extractall(target_dir)
+        contents = os.listdir(target_dir)
+        if len(contents) == 1 and os.path.isdir(os.path.join(target_dir, contents[0])):
+            return os.path.join(target_dir, contents[0])
+        return target_dir
+    else:
+        clone_url = pdir
+        if "github.com" in clone_url and "/tree/" in clone_url:
+            parts = clone_url.split("/tree/")
+            clone_url = parts[0] + ".git"
+
+        print(f"Cloning git repository {clone_url}...")
+        result = subprocess.run(["git", "clone", "--depth", "1", clone_url, target_dir], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        if result.returncode != 0:
+            raise RuntimeError(f"Error cloning repository: {result.stderr}")
+        return target_dir
+
+
 def _cmd_analyze(args: argparse.Namespace) -> int:
     """Execute the ``analyze`` sub-command. Returns an exit code."""
-    pipeline_dir: str = args.pipeline_dir
-    is_url = pipeline_dir.startswith(("http://", "https://", "git@", "git://"))
-    temp_dir_obj = None
+    pipeline_dirs: list = args.pipeline_dir
+    temp_dirs = []
+    local_dirs = []
 
-    if is_url:
-        print(f"Detected remote URL: {pipeline_dir}")
-        temp_dir_obj = tempfile.TemporaryDirectory()
-        target_dir = temp_dir_obj.name
+    try:
+        for pdir in pipeline_dirs:
+            local_dirs.append(_fetch_pipeline_dir(pdir, temp_dirs))
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        for t in temp_dirs:
+            t.cleanup()
+        return 1
 
-        try:
-            if pipeline_dir.endswith(".zip"):
-                print(f"Downloading zip archive from {pipeline_dir}...")
-                zip_path = os.path.join(target_dir, "archive.zip")
-                urllib.request.urlretrieve(pipeline_dir, zip_path)
-                print("Extracting archive...")
-                with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-                    zip_ref.extractall(target_dir)
+    graphs = []
+    for d in local_dirs:
+        print(f"Analyzing genomics pipeline at '{d}'...")
+        graphs.append(build_graph(d))
 
-                # Check if single folder nested inside zip
-                contents = os.listdir(target_dir)
-                if len(contents) == 1 and os.path.isdir(os.path.join(target_dir, contents[0])):
-                    target_dir = os.path.join(target_dir, contents[0])
-            else:
-                clone_url = pipeline_dir
-                if "github.com" in clone_url and "/tree/" in clone_url:
-                    parts = clone_url.split("/tree/")
-                    clone_url = parts[0] + ".git"
-                    print(f"Translating GitHub branch URL to repository clone URL: {clone_url}")
-
-                print(f"Cloning git repository {clone_url}...")
-                result = subprocess.run(
-                    ["git", "clone", "--depth", "1", clone_url, target_dir],
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True
-                )
-                if result.returncode != 0:
-                    print(f"Error cloning repository: {result.stderr}", file=sys.stderr)
-                    temp_dir_obj.cleanup()
-                    return 1
-
-            pipeline_dir = target_dir
-        except Exception as e:
-            print(f"Error fetching remote URL: {e}", file=sys.stderr)
-            if temp_dir_obj:
-                temp_dir_obj.cleanup()
-            return 1
+    if len(graphs) == 1:
+        combined_graph = graphs[0]
     else:
-        if not os.path.exists(pipeline_dir):
-            print(f"Error: Pipeline directory '{pipeline_dir}' does not exist.", file=sys.stderr)
-            return 1
+        print(f"Stitching {len(graphs)} repositories into an Org-Wide Meta-Graph...")
+        combined_graph = stitch_graphs(graphs)
 
-    print(f"Analyzing genomics pipeline at '{pipeline_dir}'...")
-    graph = build_graph(pipeline_dir)
-
-    # Save index in current directory if remote URL was indexed
-    index_dir = os.getcwd() if is_url else pipeline_dir
-    index_path = save_index(graph, index_dir)
+    # Save index in current directory if multiple repos or remote URL was indexed
+    is_url = pipeline_dirs[0].startswith(("http://", "https://", "git@", "git://"))
+    index_dir = os.getcwd() if (len(local_dirs) > 1 or is_url) else local_dirs[0]
+    index_path = save_index(combined_graph, index_dir)
     print(f"Analysis complete. Index saved to '{index_path}'.")
-    print(f"Indexed {len(graph['nodes'])} nodes and {len(graph['edges'])} edges.")
+    print(f"Indexed {len(combined_graph['nodes'])} nodes and {len(combined_graph['edges'])} edges.")
 
     if args.html:
-        export_html(graph, args.html)
-        print(f"Interactive graph visualization exported to '{args.html}'.")
+        export_html(combined_graph, args.html)
+        print(f"Interactive Meta-Graph visualization exported to '{args.html}'.")
 
-    if temp_dir_obj:
-        temp_dir_obj.cleanup()
+    for t in temp_dirs:
+        t.cleanup()
 
     return 0
 
@@ -386,7 +392,8 @@ def main() -> None:
     )
     analyze_parser.add_argument(
         "pipeline_dir",
-        help="Path to the pipeline directory containing Snakefile and R files.",
+        nargs='+',
+        help="Path(s) to the pipeline directories or git URLs to analyze. Pass multiple inputs to generate an Org-Wide Meta-Graph.",
     )
     analyze_parser.add_argument(
         "--html",
@@ -457,26 +464,7 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    # Automatically clone remote git repositories
-    if hasattr(args, "pipeline_dir"):
-        pdir = args.pipeline_dir
-        if pdir.startswith("http://") or pdir.startswith("https://") or pdir.startswith("git@"):
-            import subprocess
-            import tempfile
-            import atexit
-            import shutil
-            
-            temp_dir = tempfile.mkdtemp(prefix="bigi_clone_")
-            atexit.register(shutil.rmtree, temp_dir, ignore_errors=True)
-            
-            print(f"Cloning remote repository '{pdir}' into temporary workspace...")
-            try:
-                subprocess.run(["git", "clone", pdir, temp_dir], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            except subprocess.CalledProcessError:
-                print(f"Error: Failed to clone repository '{pdir}'.", file=sys.stderr)
-                sys.exit(1)
-            
-            args.pipeline_dir = temp_dir
+    # The manual cloning interceptor block has been moved inside _fetch_pipeline_dir
 
     if not args.command:
         parser.print_help()
