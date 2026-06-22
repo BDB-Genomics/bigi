@@ -32,8 +32,8 @@ def build_and_embed():
     print(f"Compiled WebAssembly size: {len(wasm_bytes) / 1024:.2f} KB")
     print(f"Base64 string size: {len(wasm_base64) / 1024:.2f} KB")
     
-    # 3. Update bigi/html_template.py
-    template_path = os.path.join(base_dir, "bigi", "html_template.py")
+    # 3. Update bigi/render/template.html
+    template_path = os.path.join(base_dir, "..", "bigi", "render", "template.html")
     if not os.path.exists(template_path):
         print(f"Error: Template file not found at {template_path}")
         return False
@@ -46,7 +46,7 @@ def build_and_embed():
     replacement = f'const WASM_BASE64 = "{wasm_base64}"; // __WASM_BASE64__'
     
     if not re.search(pattern, content):
-        print("Error: Could not find WASM_BASE64 placeholder in bigi/html_template.py")
+        print("Error: Could not find WASM_BASE64 placeholder in bigi/render/template.html")
         return False
         
     new_content = re.sub(pattern, replacement, content)
@@ -54,7 +54,7 @@ def build_and_embed():
     with open(template_path, "w", encoding="utf-8") as f:
         f.write(new_content)
         
-    print("Successfully compiled and embedded WebAssembly into bigi/html_template.py!")
+    print("Successfully compiled and embedded WebAssembly into bigi/render/template.html!")
     return True
 
 if __name__ == "__main__":

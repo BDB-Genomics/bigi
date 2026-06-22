@@ -4,7 +4,7 @@ import time
 import threading
 import re
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse
 
 # Global state for execution status
 execution_state = {
@@ -27,7 +27,7 @@ def parse_snakemake_log(log_path: str):
                 continue
                 
             # Basic parsing of Snakemake logs
-            if "rule " in line and ":" in line and not "Error" in line:
+            if "rule " in line and ":" in line and "Error" not in line:
                 match = re.search(r"rule\s+([a-zA-Z0-9_-]+):", line)
                 if match:
                     rule_name = match.group(1)
@@ -111,7 +111,8 @@ def run_server(html_path: str, log_path: str, port: int = 8080):
         t.start()
         print(f"Monitoring log file: {log_path}")
     
-    handler = lambda *args, **kwargs: BiGIHTTPRequestHandler(html_path, *args, **kwargs)
+    def handler(*args, **kwargs):
+        return BiGIHTTPRequestHandler(html_path, *args, **kwargs)
     server = HTTPServer(("localhost", port), handler)
     print(f"🚀 Live Execution Overlay server running at http://localhost:{port}/")
     print(f"Serving graph from: {html_path}")

@@ -7,7 +7,6 @@ script paths).
 
 import re
 import os
-import glob
 from typing import Optional
 
 
