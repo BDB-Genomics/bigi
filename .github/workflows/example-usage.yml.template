@@ -1,0 +1,32 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# Example: Using the BiGI Blast Radius action in YOUR repository
+# ──────────────────────────────────────────────────────────────────────────────
+# Copy this file to .github/workflows/bigi-blast-radius.yml in your own repo,
+# remove the .template extension, and push. BiGI will automatically comment on
+# every pull request with a blast-radius report of affected downstream rules.
+# ──────────────────────────────────────────────────────────────────────────────
+
+name: BiGI Blast Radius Report
+
+on:
+  pull_request:
+    branches: [main, master]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  blast-radius:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # Required for git diff detection
+
+      - name: BiGI Blast Radius
+        uses: BDB-Genomics/BiGI@main
+        with:
+          pipeline-dir: '.'       # Path to your pipeline (default: repo root)
+          # python-version: '3.11' # Optionally pin a different Python version
