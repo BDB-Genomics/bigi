@@ -1,2 +1,3 @@
 Flask==3.0.3
 networkx==3.4.2
+git+https://github.com/BDB-Genomics/BiGI.git@main
