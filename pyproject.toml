@@ -8,17 +8,21 @@ version = "1.0.1"
 description = "BiGI: Blast-radius Impact Graph Indexer — Universal Software Pipeline Intelligence & Static Analysis."
 readme = "README.md"
 requires-python = ">=3.9"
-license = { text = "MIT" }
+license = "MIT"
 dependencies = [
     "networkx",
     "flask",
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
+
+[project.urls]
+Homepage = "https://github.com/AtlasMindAI/bigi"
+Source = "https://github.com/AtlasMindAI/bigi"
+Issues = "https://github.com/AtlasMindAI/bigi/issues"
 
 [project.scripts]
 bigi = "bigi.cli:main"
