@@ -99,7 +99,7 @@ Press `Ctrl/Cmd + K` in the graph view to open one place for the main actions:
 - trace a path between nodes
 - change depth and grouping
 - toggle focus and Git filters
-- reset, pause, or export the graph
+- reset, pause, export, or use hand control
 
 ## Advanced graph views
 
@@ -107,7 +107,16 @@ Press `Ctrl/Cmd + K` in the graph view to open one place for the main actions:
 - Limit focus mode to 1, 2, 3, or all hops
 - Collapse files, folders, or packages into groups
 - Highlight changed files and downstream impact
+- Use the webcam to pan and zoom with hand motion
 - Export the same graph as HTML or GraphML
+
+## Hand control
+
+Open the graph, turn on Hand Control, and use your webcam to pan and zoom the view.
+
+- Move your hand to pan
+- Change hand size to zoom
+- Works best in a well-lit room with camera permission enabled
 
 ## Output
 

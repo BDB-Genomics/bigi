@@ -10,6 +10,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/mermaid@10.2.4/dist/mermaid.min.js"></script>
+    <script async src="https://docs.opencv.org/4.x/opencv.js"></script>
     <style>
         :root {
             --bg-color: #050505;
@@ -496,6 +497,7 @@
         <button class="btn !rounded-full !border-white/10 !bg-white/5 !px-4 !py-2 !text-[0.72rem] !font-semibold !uppercase !tracking-[0.08em] !text-slate-200 hover:!border-white/20 hover:!bg-white/10" id="btn-layout">Layout: Swimlanes</button>
         <button class="btn !rounded-full !border-sky-400/30 !bg-sky-400/15 !px-4 !py-2 !text-[0.72rem] !font-semibold !uppercase !tracking-[0.08em] !text-sky-100 hover:!border-sky-300/50 hover:!bg-sky-400/25" id="btn-export">Export PNG</button>
         <button class="btn !rounded-full !border-cyan-400/30 !bg-cyan-400/15 !px-4 !py-2 !text-[0.72rem] !font-semibold !uppercase !tracking-[0.08em] !text-cyan-100 hover:!border-cyan-300/50 hover:!bg-cyan-400/25" id="btn-command-palette">Command Palette</button>
+        <button class="btn !rounded-full !border-emerald-400/30 !bg-emerald-400/15 !px-4 !py-2 !text-[0.72rem] !font-semibold !uppercase !tracking-[0.08em] !text-emerald-100 hover:!border-emerald-300/50 hover:!bg-emerald-400/25" id="btn-hand-control">Hand Control</button>
     </div>
 
     <!-- Minimap overlay -->
@@ -505,6 +507,17 @@
 
     <!-- Toggle Left Panel button -->
     <button id="toggle-left" class="fab-btn">◀</button>
+
+    <!-- Hand Control HUD -->
+    <div id="hand-control-hud" class="!fixed !left-1/2 !top-20 !z-20 hidden -translate-x-1/2 items-center gap-3 rounded-full border border-emerald-400/20 bg-slate-950/90 px-4 py-2 text-xs text-slate-200 shadow-[0_10px_30px_rgba(0,0,0,0.35)] backdrop-blur-xl">
+        <div class="flex items-center gap-2">
+            <span class="h-2.5 w-2.5 rounded-full bg-emerald-400" id="hand-control-dot"></span>
+            <span id="hand-control-status" class="font-semibold text-emerald-200">Hand control off</span>
+        </div>
+        <div class="h-4 w-px bg-white/10"></div>
+        <div id="hand-control-hint" class="text-[0.7rem] text-slate-400">Use a webcam and a visible hand to pan and zoom</div>
+        <button class="btn !rounded-full !border-white/10 !bg-white/5 !px-3 !py-1.5 !text-[0.65rem] !text-slate-200 hover:!border-white/20 hover:!bg-white/10" id="btn-hand-control-stop">Stop</button>
+    </div>
 
     <!-- Left Panel: Legend & Search & Info -->
     <div class="panel !gap-4 !rounded-2xl !border-slate-700/60 !bg-slate-950/90 !p-5 !shadow-2xl !backdrop-blur-xl" id="left-panel">
@@ -900,6 +913,33 @@
         let isDraggingCanvas = false;
         let dragStart = { x: 0, y: 0 };
         let draggedNode = null;
+        let handControlActive = false;
+        let handControlStream = null;
+        let handControlLoopId = null;
+        let handControlFramePending = false;
+        let handControlLastSample = 0;
+        let handControlLastCentroid = null;
+        let handControlLastArea = null;
+        let handControlStableFrames = 0;
+        let handControlRequestId = 0;
+        let handControlStatus = "off";
+        let handControlEnabledByUser = false;
+        let handControlVideo = null;
+        let handControlCanvas = null;
+        let handControlCanvasCtx = null;
+        let handControlCvReady = false;
+        let handControlCvReadyResolve = null;
+        const handControlCvReadyPromise = new Promise(resolve => {
+            handControlCvReadyResolve = resolve;
+        });
+        const handControlConfig = {
+            sampleEveryMs: 120,
+            panScale: 0.9,
+            zoomScale: 0.0018,
+            minContourArea: 2500,
+            centerDeadZone: 0.08,
+            steadyFrameThreshold: 8,
+        };
         let mouseSim = { x: null, y: null };
         let layoutMode = 'swimlane'; // 'swimlane' or 'free'
         let focusDepthLimit = 2;
@@ -1092,6 +1132,7 @@
             { id: "reset_layout", label: "Reset layout", description: "Randomize node positions", keywords: ["reset", "layout"], pinned: false, section: "Layout", action: () => document.getElementById("btn-reset")?.click() },
             { id: "switch_layout", label: "Switch layout", description: "Toggle swimlane or free layout", keywords: ["layout", "swimlane", "free"], pinned: false, section: "Layout", action: () => document.getElementById("btn-layout")?.click() },
             { id: "export_png", label: "Export PNG", description: "Save the current graph as an image", keywords: ["export", "png"], pinned: true, section: "Export", action: () => document.getElementById("btn-export")?.click() },
+            { id: "hand_control", label: "Hand control", description: "Use the webcam to pan and zoom the graph", keywords: ["camera", "hand", "opencv"], pinned: true, section: "Interaction", action: () => toggleHandControl() },
             { id: "show_help", label: "Show help", description: "Open the full command list", keywords: ["help", "?"], pinned: true, section: "Help", keepOpen: true, action: () => openCommandPalette("?") }
         ];
 
@@ -1282,6 +1323,10 @@
                 "reset": () => document.getElementById("btn-reset")?.click(),
                 "layout": () => document.getElementById("btn-layout")?.click(),
                 "export": () => document.getElementById("btn-export")?.click(),
+                "hand on": () => enableHandControl(),
+                "hand off": () => disableHandControl(),
+                "camera on": () => enableHandControl(),
+                "camera off": () => disableHandControl(),
                 "clear path": () => window.clearPathTracing(),
                 "focus on": () => setCheckboxState("focus-mode-cb", true),
                 "focus off": () => setCheckboxState("focus-mode-cb", false),
@@ -1344,7 +1389,7 @@
             if (isHelpMode) {
                 addSection("Pinned", visibleCatalog.filter(cmd => cmd.pinned));
                 addSection("Recent", recentCommands);
-                ["Navigation", "Filters", "Focus", "Grouping", "Layout", "Export"].forEach(section => {
+                ["Navigation", "Filters", "Focus", "Grouping", "Layout", "Interaction", "Export"].forEach(section => {
                     addSection(section, visibleCatalog.filter(cmd => cmd.section === section && !cmd.pinned));
                 });
                 addSection("Search", [
@@ -1378,7 +1423,7 @@
                 addSection("Recent", recentCommands.filter(matchCommand));
             }
 
-            ["Navigation", "Filters", "Focus", "Grouping", "Layout", "Export"].forEach(section => {
+            ["Navigation", "Filters", "Focus", "Grouping", "Layout", "Interaction", "Export"].forEach(section => {
                 addSection(section, visibleCatalog.filter(cmd => cmd.section === section && matchCommand(cmd) && !cmd.pinned));
             });
 
@@ -1482,6 +1527,328 @@
             if (backdrop) backdrop.classList.add("hidden");
             if (palette) palette.classList.add("hidden");
         }
+
+        function clamp(value, min, max) {
+            return Math.min(max, Math.max(min, value));
+        }
+
+        function ensureHandControlNodes() {
+            if (!handControlVideo) {
+                handControlVideo = document.createElement("video");
+                handControlVideo.autoplay = true;
+                handControlVideo.playsInline = true;
+                handControlVideo.muted = true;
+                handControlVideo.style.display = "none";
+                document.body.appendChild(handControlVideo);
+            }
+            if (!handControlCanvas) {
+                handControlCanvas = document.createElement("canvas");
+                handControlCanvas.width = 320;
+                handControlCanvas.height = 240;
+                handControlCanvas.style.display = "none";
+                document.body.appendChild(handControlCanvas);
+                handControlCanvasCtx = handControlCanvas.getContext("2d", { willReadFrequently: true });
+            }
+        }
+
+        function updateHandControlHud(status, hint = "") {
+            const hud = document.getElementById("hand-control-hud");
+            const statusEl = document.getElementById("hand-control-status");
+            const hintEl = document.getElementById("hand-control-hint");
+            const dot = document.getElementById("hand-control-dot");
+            if (hud) hud.classList.toggle("hidden", !handControlActive && status === "off");
+            if (statusEl) statusEl.textContent = status;
+            if (hintEl && hint) hintEl.textContent = hint;
+            if (dot) {
+                dot.className = `h-2.5 w-2.5 rounded-full ${handControlActive ? "bg-emerald-400 shadow-[0_0_14px_rgba(52,211,153,0.75)]" : "bg-slate-500"}`;
+            }
+            handControlStatus = status;
+        }
+
+        function setHandControlButtonState(active) {
+            const btn = document.getElementById("btn-hand-control");
+            const stopBtn = document.getElementById("btn-hand-control-stop");
+            if (btn) {
+                btn.textContent = active ? "Hand Control On" : "Hand Control";
+            }
+            if (stopBtn) {
+                stopBtn.disabled = !active;
+            }
+        }
+
+        function stopHandControl(message = "Hand control off") {
+            handControlRequestId += 1;
+            handControlActive = false;
+            handControlEnabledByUser = false;
+            handControlLastCentroid = null;
+            handControlLastArea = null;
+            handControlStableFrames = 0;
+            handControlLastSample = 0;
+            handControlFramePending = false;
+            if (handControlLoopId) {
+                cancelAnimationFrame(handControlLoopId);
+                handControlLoopId = null;
+            }
+            if (handControlStream) {
+                handControlStream.getTracks().forEach(track => track.stop());
+                handControlStream = null;
+            }
+            if (handControlVideo) {
+                handControlVideo.srcObject = null;
+            }
+            setHandControlButtonState(false);
+            updateHandControlHud(message, "Use Ctrl/Cmd + K and search 'hand control' to turn it back on");
+            draw();
+        }
+
+        function processHandControlFrame() {
+            if (!handControlVideo || !handControlCanvas || !handControlCanvasCtx || !window.cv || !handControlCvReady) return false;
+            if (!handControlVideo.videoWidth || !handControlVideo.videoHeight) return false;
+
+            handControlCanvas.width = 320;
+            handControlCanvas.height = 240;
+            handControlCanvasCtx.drawImage(handControlVideo, 0, 0, handControlCanvas.width, handControlCanvas.height);
+
+            let src = null;
+            let rgb = null;
+            let hsv = null;
+            let blur = null;
+            let mask = null;
+            let kernel = null;
+            let contours = null;
+            let hierarchy = null;
+
+            try {
+                src = cv.imread(handControlCanvas);
+                rgb = new cv.Mat();
+                hsv = new cv.Mat();
+                blur = new cv.Mat();
+                mask = new cv.Mat();
+                kernel = cv.Mat.ones(5, 5, cv.CV_8U);
+                contours = new cv.MatVector();
+                hierarchy = new cv.Mat();
+
+                cv.cvtColor(src, rgb, cv.COLOR_RGBA2RGB);
+                cv.cvtColor(rgb, hsv, cv.COLOR_RGB2HSV);
+                cv.GaussianBlur(hsv, blur, new cv.Size(7, 7), 0, 0, cv.BORDER_DEFAULT);
+                cv.inRange(blur, new cv.Scalar(0, 30, 60, 0), new cv.Scalar(28, 190, 255, 255), mask);
+                cv.morphologyEx(mask, mask, cv.MORPH_OPEN, kernel);
+                cv.morphologyEx(mask, mask, cv.MORPH_CLOSE, kernel);
+                cv.findContours(mask, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+
+                let largestIndex = -1;
+                let largestArea = 0;
+                for (let i = 0; i < contours.size(); i++) {
+                    const contour = contours.get(i);
+                    const area = cv.contourArea(contour, false);
+                    if (area > largestArea) {
+                        largestArea = area;
+                        largestIndex = i;
+                    }
+                }
+
+                if (largestIndex === -1 || largestArea < handControlConfig.minContourArea) {
+                    handControlStableFrames = 0;
+                    updateHandControlHud("Hand control on", "Show one open hand to the camera");
+                    return false;
+                }
+
+                const largestContour = contours.get(largestIndex);
+                const moments = cv.moments(largestContour, false);
+                largestContour.delete();
+                for (let i = 0; i < contours.size(); i++) {
+                    if (i === largestIndex) continue;
+                    const contour = contours.get(i);
+                    contour.delete();
+                }
+                const areaNorm = largestArea / (handControlCanvas.width * handControlCanvas.height);
+                const centroid = moments.m00 === 0 ? null : {
+                    x: moments.m10 / moments.m00 / handControlCanvas.width,
+                    y: moments.m01 / moments.m00 / handControlCanvas.height
+                };
+
+                if (!centroid) {
+                    handControlStableFrames = 0;
+                    updateHandControlHud("Hand control on", "Move your hand into view");
+                    return false;
+                }
+
+                if (handControlLastCentroid) {
+                    const dx = centroid.x - handControlLastCentroid.x;
+                    const dy = centroid.y - handControlLastCentroid.y;
+                    if (Math.abs(dx) > 0.003 || Math.abs(dy) > 0.003) {
+                        transform.x += dx * width * handControlConfig.panScale;
+                        transform.y += dy * height * handControlConfig.panScale;
+                        handControlStableFrames = 0;
+                    } else {
+                        handControlStableFrames += 1;
+                    }
+                }
+
+                if (handControlLastArea !== null) {
+                    const delta = areaNorm - handControlLastArea;
+                    if (Math.abs(delta) > 0.004) {
+                        const scale = 1 + delta * handControlConfig.zoomScale * 1000;
+                        const nextK = clamp(transform.k * scale, 0.1, 10);
+                        if (nextK !== transform.k) {
+                            const anchorX = width / 2;
+                            const anchorY = height / 2;
+                            const scaleRatio = nextK / transform.k;
+                            transform.x = anchorX - (anchorX - transform.x) * scaleRatio;
+                            transform.y = anchorY - (anchorY - transform.y) * scaleRatio;
+                            transform.k = nextK;
+                        }
+                    }
+                }
+
+                handControlLastCentroid = centroid;
+                handControlLastArea = areaNorm;
+                const gestureHint = handControlStableFrames >= handControlConfig.steadyFrameThreshold
+                    ? "Hold steady to keep the view calm"
+                    : "Move your hand to pan. Change hand size to zoom";
+                updateHandControlHud("Hand control on", gestureHint);
+                return true;
+            } catch (err) {
+                console.error("Hand control frame failed", err);
+                updateHandControlHud("Hand control on", "Camera is on, but the frame could not be read");
+                return false;
+            } finally {
+                if (src) src.delete();
+                if (rgb) rgb.delete();
+                if (hsv) hsv.delete();
+                if (blur) blur.delete();
+                if (mask) mask.delete();
+                if (kernel) kernel.delete();
+                if (contours) contours.delete();
+                if (hierarchy) hierarchy.delete();
+            }
+        }
+
+        function scheduleHandControlLoop() {
+            if (!handControlActive) return;
+            handControlLoopId = requestAnimationFrame((timestamp) => {
+                if (!handControlActive) return;
+                if (timestamp - handControlLastSample >= handControlConfig.sampleEveryMs) {
+                    handControlLastSample = timestamp;
+                    processHandControlFrame();
+                    draw();
+                }
+                scheduleHandControlLoop();
+            });
+        }
+
+        async function enableHandControl() {
+            handControlEnabledByUser = true;
+            const requestId = ++handControlRequestId;
+            ensureHandControlNodes();
+            setHandControlButtonState(true);
+            updateHandControlHud("Hand control starting", "Waiting for camera permission and OpenCV");
+
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                handControlEnabledByUser = false;
+                updateHandControlHud("Hand control unavailable", "This browser does not support webcam access");
+                setHandControlButtonState(false);
+                return;
+            }
+
+            try {
+                const openCvReady = await waitForOpenCvReady();
+                if (!openCvReady) {
+                    handControlEnabledByUser = false;
+                    updateHandControlHud("Hand control unavailable", "OpenCV is still loading");
+                    setHandControlButtonState(false);
+                    return;
+                }
+
+                if (requestId !== handControlRequestId || !handControlEnabledByUser) {
+                    return;
+                }
+
+                handControlStream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: "user" },
+                    audio: false
+                });
+                if (requestId !== handControlRequestId || !handControlEnabledByUser) {
+                    handControlStream.getTracks().forEach(track => track.stop());
+                    handControlStream = null;
+                    return;
+                }
+                handControlVideo.srcObject = handControlStream;
+                await handControlVideo.play();
+                if (requestId !== handControlRequestId || !handControlEnabledByUser) {
+                    if (handControlStream) {
+                        handControlStream.getTracks().forEach(track => track.stop());
+                        handControlStream = null;
+                    }
+                    return;
+                }
+                handControlActive = true;
+                handControlLastSample = 0;
+                handControlLastCentroid = null;
+                handControlLastArea = null;
+                updateHandControlHud("Hand control on", "Move your hand to pan. Change hand size to zoom");
+                scheduleHandControlLoop();
+                draw();
+            } catch (err) {
+                console.error("Unable to start hand control", err);
+                stopHandControl("Hand control off");
+                updateHandControlHud("Hand control failed", "Camera permission is required");
+            }
+        }
+
+        function disableHandControl() {
+            stopHandControl("Hand control off");
+        }
+
+        function toggleHandControl() {
+            if (handControlActive || handControlEnabledByUser) {
+                disableHandControl();
+            } else {
+                enableHandControl();
+            }
+        }
+
+        async function waitForOpenCvReady(timeoutMs = 8000) {
+            if (handControlCvReady) return true;
+            return await Promise.race([
+                handControlCvReadyPromise.then(() => true),
+                new Promise(resolve => setTimeout(() => resolve(false), timeoutMs))
+            ]);
+        }
+
+        window.toggleHandControl = toggleHandControl;
+        window.enableHandControl = enableHandControl;
+        window.disableHandControl = disableHandControl;
+
+        (function watchOpenCvReady() {
+            const readyCheck = () => {
+                if (window.cv && typeof window.cv.Mat === "function" && typeof window.cv.imread === "function") {
+                    try {
+                        if (typeof window.cv.getBuildInformation === "function") {
+                            window.cv.getBuildInformation();
+                        }
+                        if (!handControlCvReady) {
+                            handControlCvReady = true;
+                            if (handControlCvReadyResolve) {
+                                handControlCvReadyResolve();
+                                handControlCvReadyResolve = null;
+                            }
+                        }
+                        return true;
+                    } catch {
+                        return false;
+                    }
+                }
+                return false;
+            };
+
+            if (readyCheck()) return;
+            const timer = setInterval(() => {
+                if (readyCheck()) {
+                    clearInterval(timer);
+                }
+            }, 100);
+        })();
 
         // Populate Git Risk / Blast Radius Dashboard
         function populateGitDashboard() {
@@ -3818,8 +4185,16 @@
         const commandPaletteBtn = document.getElementById("btn-command-palette");
         const commandPaletteBackdrop = document.getElementById("command-palette-backdrop");
         const commandPaletteInput = document.getElementById("command-palette-input");
+        const handControlBtn = document.getElementById("btn-hand-control");
+        const handControlStopBtn = document.getElementById("btn-hand-control-stop");
         if (commandPaletteBtn) {
             commandPaletteBtn.onclick = () => openCommandPalette();
+        }
+        if (handControlBtn) {
+            handControlBtn.onclick = () => toggleHandControl();
+        }
+        if (handControlStopBtn) {
+            handControlStopBtn.onclick = () => disableHandControl();
         }
         if (commandPaletteBackdrop) {
             commandPaletteBackdrop.onclick = () => closeCommandPalette();
@@ -3862,6 +4237,9 @@
                 e.preventDefault();
                 closeCommandPalette();
             }
+        });
+        window.addEventListener("beforeunload", () => {
+            disableHandControl();
         });
         if (graphData.selected_node_id) {
             setTimeout(() => {
