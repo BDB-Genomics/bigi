@@ -8,6 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/mermaid@10.2.4/dist/mermaid.min.js"></script>
     <style>
         :root {
@@ -472,51 +473,53 @@
     </div>
 
     <!-- Path Tracing HUD Overlay -->
-    <div id="path-tracing-hud">
-        <div style="display: flex; align-items: center; gap: 6px;">
-            <span style="font-size: 0.75rem; color: #ff00aa;">[START]</span>
-            <span style="color: var(--text-muted); font-size: 0.72rem;">Start:</span>
-            <span id="path-start-name" style="color: #a5b4fc; font-weight: 600; font-family: monospace;">-</span>
+    <div id="path-tracing-hud" class="!fixed !left-1/2 !top-5 !z-20 hidden -translate-x-1/2 items-center gap-3 rounded-full border border-white/10 bg-slate-950/85 px-4 py-2 text-xs text-slate-200 shadow-[0_12px_40px_rgba(0,0,0,0.4)] backdrop-blur-xl">
+        <div class="flex items-center gap-2">
+            <span class="text-[0.75rem] font-semibold text-fuchsia-400">[START]</span>
+            <span class="text-[0.72rem] text-slate-400">Start:</span>
+            <span id="path-start-name" class="font-mono font-semibold text-indigo-300">-</span>
         </div>
-        <div style="color: rgba(255,255,255,0.25); font-weight: 300;">-></div>
-        <div style="display: flex; align-items: center; gap: 6px;">
-            <span style="font-size: 0.75rem; color: #00e5ff;">[END]</span>
-            <span style="color: var(--text-muted); font-size: 0.72rem;">End:</span>
-            <span id="path-end-name" style="color: #f472b6; font-weight: 600; font-family: monospace;">-</span>
+        <div class="font-light text-white/25">-&gt;</div>
+        <div class="flex items-center gap-2">
+            <span class="text-[0.75rem] font-semibold text-cyan-300">[END]</span>
+            <span class="text-[0.72rem] text-slate-400">End:</span>
+            <span id="path-end-name" class="font-mono font-semibold text-pink-300">-</span>
         </div>
-        <div style="width: 1px; height: 16px; background: rgba(255,255,255,0.15); margin: 0 4px;"></div>
-        <button class="btn" style="padding: 2px 8px; font-size: 0.65rem; background: rgba(244, 63, 94, 0.15); border: 1px solid rgba(244, 63, 94, 0.3); color: #fda4af;" onclick="clearPathTracing()">Clear</button>
+        <div class="h-4 w-px bg-white/15"></div>
+        <button class="btn !rounded-full !border-rose-400/30 !bg-rose-500/15 !px-3 !py-1 !text-[0.65rem] !text-rose-200 hover:!border-rose-300/50 hover:!bg-rose-500/25" onclick="clearPathTracing()">Clear</button>
     </div>
 
     <!-- Controls -->
-    <div id="controls">
-        <button class="btn" id="btn-pause">Pause Physics</button>
-        <button class="btn" id="btn-reset">Reset Layout</button>
-        <button class="btn" id="btn-layout">Layout: Swimlanes</button>
-        <button class="btn" id="btn-export">Export PNG</button>
+    <div id="controls" class="!fixed !bottom-5 !left-5 !z-20 flex flex-wrap gap-2">
+        <button class="btn !rounded-full !border-white/10 !bg-white/5 !px-4 !py-2 !text-[0.72rem] !font-semibold !uppercase !tracking-[0.08em] !text-slate-200 hover:!border-white/20 hover:!bg-white/10" id="btn-pause">Pause Physics</button>
+        <button class="btn !rounded-full !border-white/10 !bg-white/5 !px-4 !py-2 !text-[0.72rem] !font-semibold !uppercase !tracking-[0.08em] !text-slate-200 hover:!border-white/20 hover:!bg-white/10" id="btn-reset">Reset Layout</button>
+        <button class="btn !rounded-full !border-white/10 !bg-white/5 !px-4 !py-2 !text-[0.72rem] !font-semibold !uppercase !tracking-[0.08em] !text-slate-200 hover:!border-white/20 hover:!bg-white/10" id="btn-layout">Layout: Swimlanes</button>
+        <button class="btn !rounded-full !border-sky-400/30 !bg-sky-400/15 !px-4 !py-2 !text-[0.72rem] !font-semibold !uppercase !tracking-[0.08em] !text-sky-100 hover:!border-sky-300/50 hover:!bg-sky-400/25" id="btn-export">Export PNG</button>
     </div>
 
     <!-- Minimap overlay -->
-    <div id="minimap-container" style="position: absolute; bottom: 20px; right: 20px; width: 150px; height: 100px; background: var(--panel-bg); border: 1px solid var(--border-color); border-radius: 4px; z-index: 10; overflow: hidden; pointer-events: none;">
-        <canvas id="minimapCanvas" style="width: 100%; height: 100%; display: block;"></canvas>
+    <div id="minimap-container" class="pointer-events-none !fixed !bottom-5 !right-5 !z-10 h-28 w-40 overflow-hidden rounded-2xl border border-white/10 bg-slate-950/80 shadow-[0_10px_30px_rgba(0,0,0,0.35)] backdrop-blur-xl">
+        <canvas id="minimapCanvas" class="block h-full w-full"></canvas>
     </div>
 
     <!-- Toggle Left Panel button -->
     <button id="toggle-left" class="fab-btn">◀</button>
 
     <!-- Left Panel: Legend & Search & Info -->
-    <div class="panel" id="left-panel">
-        <div>
-            <button class="panel-close-btn" id="close-left-btn">×</button>
-            <h2 style="display: flex; align-items: center; gap: 8px; font-size: 1.1rem; letter-spacing: -0.01em;">
-                <span style="font-size: 1.25rem;">🧬</span> BiGI Impact Graph
-            </h2>
-            <div class="subtitle" style="font-size: 0.65rem; color: #6366f1; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 3px;">Cross-Layer Index</div>
+    <div class="panel !gap-4 !rounded-2xl !border-slate-700/60 !bg-slate-950/90 !p-5 !shadow-2xl !backdrop-blur-xl" id="left-panel">
+        <div class="flex items-start justify-between gap-4">
+            <div>
+                <h2 class="flex items-center gap-2 text-[1.05rem] font-semibold tracking-tight text-white">
+                    BiGI Impact Graph
+                </h2>
+                <div class="mt-1 text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-indigo-400">Cross-Layer Index</div>
+            </div>
+            <button class="panel-close-btn !float-none !rounded-full !border !border-white/10 !bg-white/5 !px-2.5 !py-1 !text-sm !text-slate-300 hover:!border-white/20 hover:!text-white" id="close-left-btn">×</button>
         </div>
 
-        <div class="left-tabs">
-            <div id="left-tab-btn-search" class="left-tab-btn active" style="--highlight-color: #818cf8;" onclick="switchLeftTab('search')">🔍 Search</div>
-            <div id="left-tab-btn-git" class="left-tab-btn" style="--highlight-color: #fdba74; position: relative;" onclick="switchLeftTab('git')">
+        <div class="left-tabs !mt-2 !rounded-xl !border !border-white/10 !bg-white/5 !p-1">
+            <div id="left-tab-btn-search" class="left-tab-btn active !rounded-lg !px-3 !py-2 !text-[0.65rem] !font-semibold !uppercase !tracking-[0.12em] !text-slate-300" style="--highlight-color: #818cf8;" onclick="switchLeftTab('search')">Search</div>
+            <div id="left-tab-btn-git" class="left-tab-btn !rounded-lg !px-3 !py-2 !text-[0.65rem] !font-semibold !uppercase !tracking-[0.12em] !text-slate-300" style="--highlight-color: #fdba74; position: relative;" onclick="switchLeftTab('git')">
                 Git Risk
                 <span id="git-changes-badge" style="display: none; background: #f97316; color: white; font-size: 0.58rem; font-weight: bold; padding: 1px 5px; border-radius: 10px; margin-left: 4px; box-shadow: 0 0 5px rgba(249, 115, 22, 0.4);">0</span>
             </div>
@@ -607,9 +610,15 @@
     </div>
 
     <!-- Right Panel: Node details Inspector -->
-    <div class="panel" id="right-panel">
-        <button class="panel-close-btn" id="close-right-btn">×</button>
-        <div id="detail-content">
+    <div class="panel !gap-4 !rounded-2xl !border-slate-700/60 !bg-slate-950/90 !p-5 !shadow-2xl !backdrop-blur-xl" id="right-panel">
+        <div class="flex items-start justify-between gap-4">
+            <div>
+                <h2 class="text-[1rem] font-semibold tracking-tight text-white">Node Inspector</h2>
+                <div class="mt-1 text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-sky-400">Dependencies, source, and traces</div>
+            </div>
+            <button class="panel-close-btn !float-none !rounded-full !border !border-white/10 !bg-white/5 !px-2.5 !py-1 !text-sm !text-slate-300 hover:!border-white/20 hover:!text-white" id="close-right-btn">×</button>
+        </div>
+        <div id="detail-content" class="space-y-4">
             <!-- Populated by JS -->
         </div>
     </div>
