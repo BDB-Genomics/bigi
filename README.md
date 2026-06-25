@@ -9,7 +9,10 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 [![npm](https://img.shields.io/badge/npx-bigi-CB3837.svg)](https://www.npmjs.com/)
 
-<img src="assets/bigi_hero.jpg" width="800" alt="BiGI Interactive Dependency Graph">
+<figure>
+<img src="assets/hero.jpg" width="800" alt="BiGI blast radius graph preview" style="border-radius:16px; box-shadow:0 20px 60px rgba(0,0,0,0.25);">
+<figcaption style="margin-top:12px; color:#6b7280; font-size:0.95rem;">Interactive blast-radius visualization for pipeline-heavy repositories.</figcaption>
+</figure>
 
 > BiGI statically analyzes your entire project — pipelines, scripts, functions — and builds an interactive dependency graph.
 > Change a function? BiGI instantly shows you every downstream rule, script, and data output that will break.
