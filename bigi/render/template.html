@@ -882,7 +882,7 @@
         });
 
         function initNodeSizes() {
-            ctx.font = "9px sans-serif";
+            ctx.font = "9px 'Outfit', sans-serif";
             nodes.forEach(n => {
                 const textWidth = ctx.measureText(n.name).width;
                 const w = Math.max(textWidth + 24, 70);
@@ -3574,7 +3574,7 @@
                 ctx.setLineDash([]);
                 
                 ctx.fillStyle = isCollapsed ? `rgba(165, 180, 252, ${0.85 * cardOpacity})` : `rgba(148, 163, 184, ${0.5 * cardOpacity})`;
-                ctx.font = isCollapsed ? "bold italic 7.5px sans-serif" : "italic 7px sans-serif";
+                ctx.font = isCollapsed ? "italic 600 7.5px 'Outfit', sans-serif" : "italic 400 7px 'Outfit', sans-serif";
                 ctx.textAlign = "left";
                 ctx.textBaseline = "top";
                 ctx.fillText((isCollapsed ? "📂 [Collapsed] " : "") + clusterLabel, rx + 8, ry + 6);
@@ -3709,7 +3709,7 @@
                     ctx.translate(mx, my);
                     ctx.rotate(textAngle);
                     
-                    ctx.font = isLinkSelected ? "bold 7px sans-serif" : "7px sans-serif";
+                    ctx.font = isLinkSelected ? "600 7px 'Outfit', sans-serif" : "400 7px 'Outfit', sans-serif";
                     
                     const labelText = l.label;
                     const textWidth = ctx.measureText(labelText).width;
@@ -3995,7 +3995,7 @@
                 }
 
                 // Draw text inside the default pill badge capsule (no canvas card expansion, clean UI)
-                ctx.font = isSelected ? "bold 9px sans-serif" : "9px sans-serif";
+                ctx.font = isSelected ? "600 9px 'Outfit', sans-serif" : "400 9px 'Outfit', sans-serif";
                 ctx.fillStyle = isSelected ? hexToRgba("#ffffff", nodeOpacity) : isHovered ? hexToRgba("#f3f4f6", nodeOpacity) : hexToRgba("#cbd5e1", nodeOpacity);
                 ctx.textAlign = "center";
                 ctx.textBaseline = "middle";
