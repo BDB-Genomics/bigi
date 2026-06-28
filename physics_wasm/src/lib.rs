@@ -136,18 +136,18 @@ pub extern "C" fn step_simulation(layout_mode: i32, width: f32, height: f32) {
         let type_id = slice::from_raw_parts(TYPE_PTR, NUM_NODES);
         let active = slice::from_raw_parts(ACTIVE_PTR, NUM_NODES);
 
-        // 1. Hierarchical Constraint X-Forces
-        if layout_mode == 1 { // 'hierarchical' layout
+        // 1. Swimlane Constraint Y-Forces
+        if layout_mode == 1 { // 'swimlane' layout
             for i in 0..NUM_NODES {
                 if active[i] == 0 || w[i] < 1.0 { continue; }
                 
-                let target_x = match type_id[i] {
-                    1 => width * 0.15, // RULE (Left)
-                    0 => width * 0.50, // FUNC (Middle)
-                    _ => width * 0.85, // UNRES / SCHEMA (Right)
+                let target_y = match type_id[i] {
+                    1 => height * 0.23, // RULE
+                    0 => height * 0.53, // FUNC
+                    _ => height * 0.83, // UNRES
                 };
                 
-                vx[i] += (target_x - x[i]) * 0.008;
+                vy[i] += (target_y - y[i]) * 0.008;
             }
         }
 
