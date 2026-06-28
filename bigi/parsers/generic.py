@@ -161,6 +161,32 @@ def find_end_block(source: str, start_char_idx: int) -> int:
     return -1
 
 
+BINARY_EXTENSIONS = {
+    # Images
+    '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff', '.ico', '.webp', '.svg',
+    # Archives
+    '.zip', '.tar', '.gz', '.bz2', '.xz', '.rar', '.7z', '.jar', '.war',
+    # Audio/Video
+    '.mp3', '.wav', '.ogg', '.flac', '.mp4', '.avi', '.mkv', '.mov', '.wmv',
+    # Documents
+    '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.odt',
+    # Executables/Objects
+    '.exe', '.dll', '.so', '.dylib', '.o', '.a', '.bin', '.class', '.pyc',
+    # Database/Data
+    '.db', '.sqlite', '.sqlite3', '.parquet', '.pcap', '.dat',
+    # Font
+    '.ttf', '.otf', '.woff', '.woff2', '.eot'
+}
+
+def is_binary_file(file_path: str) -> bool:
+    """Check if a file is binary by reading the first 1024 bytes and checking for null bytes."""
+    try:
+        with open(file_path, 'rb') as f:
+            chunk = f.read(1024)
+            return b'\x00' in chunk
+    except Exception:
+        return True
+
 def get_language_spec(file_path: str, source: str) -> Optional[dict]:
     """Determine the language spec to use based on file extension or shebang."""
     ext = os.path.splitext(file_path)[1].lower()
@@ -177,11 +203,8 @@ def get_language_spec(file_path: str, source: str) -> Optional[dict]:
             if name in first_line:
                 return spec
                 
-    # Fallback to default if it looks like a script/source code file
-    if ext in (".sh", ".pl", ".pm", ".jl", ".m", ".js", ".ts", ".rs", ".go", ".c", ".cpp", ".cc", ".cxx", ".h", ".hpp", ".nf", ".smk", ".wdl", ".cwl", ".rb"):
-        return DEFAULT_SPEC
-        
-    return None
+    # Fallback to default spec for any other text files
+    return DEFAULT_SPEC
 
 
 def parse_generic_file(file_path: str, base_dir: str) -> dict:
@@ -191,14 +214,10 @@ def parse_generic_file(file_path: str, base_dir: str) -> dict:
     calls = []
     
     ext = os.path.splitext(file_path)[1].lower()
-    supported_extensions = {
-        ".sh", ".bash", ".pl", ".pm", ".jl", ".m", ".js", ".ts", ".jsx", ".tsx",
-        ".rs", ".go", ".c", ".cpp", ".cc", ".cxx", ".h", ".hpp", ".nf", ".smk",
-        ".wdl", ".cwl", ".rb"
-    }
-    
-    # Skip checking if it has a non-supported extension (files without extensions are kept for shebang check)
-    if ext and ext not in supported_extensions:
+    if ext in BINARY_EXTENSIONS:
+        return {"definitions": [], "calls": []}
+        
+    if is_binary_file(file_path):
         return {"definitions": [], "calls": []}
         
     try:

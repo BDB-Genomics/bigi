@@ -182,3 +182,26 @@ def test_parser_respects_gitignore():
                 
         assert "active_function" in node_names
         assert "ignored_function" not in node_names
+
+
+def test_generic_parser_supports_any_text_file():
+    """Test that generic parser falls back to default spec for unrecognized text file extensions."""
+    from bigi.parsers.generic import parse_generic_file
+    
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Create a file with a completely random/unrecognized extension containing PHP or Ruby style func definition
+        random_file = os.path.join(tmpdir, "script.xyz")
+        with open(random_file, "w", encoding="utf-8") as f:
+            f.write("def custom_xyz_func(x, y) {\n  some_xyz_call(x);\n}\n")
+            
+        res = parse_generic_file(random_file, tmpdir)
+        defs = res["definitions"]
+        calls = res["calls"]
+        
+        # Verify function definition
+        assert len(defs) == 1
+        assert defs[0]["name"] == "custom_xyz_func"
+        
+        # Verify function calls
+        call_names = [c["name"] for c in calls]
+        assert "some_xyz_call" in call_names
