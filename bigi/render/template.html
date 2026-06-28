@@ -499,6 +499,9 @@
         <canvas id="minimapCanvas" class="block h-full w-full"></canvas>
     </div>
 
+    <!-- Floating Pause Button -->
+    <button id="btn-pause-float" onclick="document.getElementById('btn-pause').click(); this.textContent = document.getElementById('btn-pause').textContent" class="!fixed !bottom-5 !left-5 !z-20 rounded-full border border-white/10 bg-slate-950/80 px-4 py-2 text-xs font-semibold text-slate-200 shadow-[0_10px_30px_rgba(0,0,0,0.35)] backdrop-blur-xl hover:bg-slate-800/80 transition-colors cursor-pointer">Pause</button>
+
     <!-- Toggle Left Panel button -->
     <button id="toggle-left" class="fab-btn collapsed">▶</button>
 
@@ -2684,9 +2687,12 @@
 
         // Pause / Play Physics
         const pauseBtn = document.getElementById("btn-pause");
+        const pauseBtnFloat = document.getElementById("btn-pause-float");
         pauseBtn.onclick = () => {
             isSimulating = !isSimulating;
-            pauseBtn.textContent = isSimulating ? "Pause" : "Resume";
+            const label = isSimulating ? "Pause" : "Resume";
+            pauseBtn.textContent = label;
+            if (pauseBtnFloat) pauseBtnFloat.textContent = label;
         };
 
         // Reset positions
