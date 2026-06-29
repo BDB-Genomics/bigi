@@ -4353,19 +4353,46 @@
             };
         }
 
-        // Double click to collapse/expand group cards
+        // Double click to select nodes or collapse/expand group cards
         canvas.addEventListener("dblclick", (e) => {
             const rect = canvas.getBoundingClientRect();
             const mouseX = e.clientX - rect.left;
             const mouseY = e.clientY - rect.top;
             const simMouse = toSimCoords(mouseX, mouseY);
             
-            // Check if clicked inside a group card bounds
-            let clickedGroup = null;
-            const { groups: localGroups } = buildClusterGroups();
-            
+            const hideUnresolved = document.getElementById("hide-unresolved-cb").checked;
             const focusModeCb = document.getElementById("focus-mode-cb");
             const isFocusMode = focusModeCb && focusModeCb.checked && selectedNode;
+            const { groups: localGroups } = buildClusterGroups();
+            
+            // 1. Check if a node was double-clicked
+            let clickedNode = null;
+            for (let n of nodes) {
+                if (hideUnresolved && n.type === 'unresolved') continue;
+                if (isFocusMode && !selectedNodeActivePaths.has(n.id)) continue;
+                
+                const clusterKey = getClusterKey(n);
+                if (clusterKey && collapsedGroups.has(clusterKey)) {
+                    const primary = localGroups[clusterKey] && (localGroups[clusterKey].find(gn => !isFocusMode || selectedNodeActivePaths.has(gn.id)) || localGroups[clusterKey][0]);
+                    if (primary !== n) continue;
+                }
+
+                const dx = n.x - simMouse.x;
+                const dy = n.y - simMouse.y;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+                if (dist <= n.radius + 5) {
+                    clickedNode = n;
+                    break;
+                }
+            }
+
+            if (clickedNode) {
+                selectNode(clickedNode);
+                return; // Stop here if we selected a node
+            }
+
+            // 2. Check if clicked inside a group card bounds
+            let clickedGroup = null;
             
             Object.entries(localGroups).forEach(([clusterKey, groupNodes]) => {
                 if (groupNodes.length < 2) return;
@@ -4405,47 +4432,11 @@
 
         // Mouse Interactions
         canvas.addEventListener("mousedown", (e) => {
-            const rect = canvas.getBoundingClientRect();
-            const mouseX = e.clientX - rect.left;
-            const mouseY = e.clientY - rect.top;
-            const simMouse = toSimCoords(mouseX, mouseY);
-            
-            const hideUnresolved = document.getElementById("hide-unresolved-cb").checked;
-            const focusModeCb = document.getElementById("focus-mode-cb");
-            const isFocusMode = focusModeCb && focusModeCb.checked && selectedNode;
-            const { groups: localGroups } = buildClusterGroups();
-
-            let clickedNode = null;
-            for (let n of nodes) {
-                if (hideUnresolved && n.type === 'unresolved') continue;
-                if (isFocusMode && !selectedNodeActivePaths.has(n.id)) continue;
-                
-                // If collapsed group, skip secondary nodes
-                const clusterKey = getClusterKey(n);
-                if (clusterKey && collapsedGroups.has(clusterKey)) {
-                    const primary = localGroups[clusterKey] && (localGroups[clusterKey].find(gn => !isFocusMode || selectedNodeActivePaths.has(gn.id)) || localGroups[clusterKey][0]);
-                    if (primary !== n) continue;
-                }
-
-                const dx = n.x - simMouse.x;
-                const dy = n.y - simMouse.y;
-                const dist = Math.sqrt(dx*dx + dy*dy);
-                if (dist <= n.radius + 5) {
-                    clickedNode = n;
-                    break;
-                }
-            }
-
-            if (clickedNode) {
-                draggedNode = clickedNode;
-                selectNode(clickedNode);
-            } else {
-                isDraggingCanvas = true;
-                mouseSim.x = null;
-                mouseSim.y = null;
-                dragStart.x = e.clientX - transform.x;
-                dragStart.y = e.clientY - transform.y;
-            }
+            isDraggingCanvas = true;
+            mouseSim.x = null;
+            mouseSim.y = null;
+            dragStart.x = e.clientX - transform.x;
+            dragStart.y = e.clientY - transform.y;
         });
 
         canvas.addEventListener("mousemove", (e) => {
