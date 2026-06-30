@@ -764,6 +764,10 @@
                                 <option value="openai">OpenAI</option>
                                 <option value="anthropic">Anthropic</option>
                                 <option value="deepseek">DeepSeek</option>
+                                <option value="ollama">Ollama (Local)</option>
+                                <option value="groq">Groq</option>
+                                <option value="together">Together AI</option>
+                                <option value="cohere">Cohere</option>
                             </select>
                         </div>
                         
@@ -4692,7 +4696,7 @@
             const provider = document.getElementById("ai-provider-select").value;
             const apiKey = document.getElementById("ai-api-key").value;
             
-            if (!apiKey) {
+            if (!apiKey && provider !== "ollama") {
                 alert("Please enter an API key for " + provider);
                 return;
             }
@@ -4773,6 +4777,71 @@
                     const data = await res.json();
                     textResponse = data.choices?.[0]?.message?.content || "No response.";
                 }
+                else if (provider === "ollama") {
+                    const baseUrl = apiKey || "http://localhost:11434";
+                    const res = await fetch(`${baseUrl}/api/generate`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            model: "llama3",
+                            prompt: prompt,
+                            stream: false
+                        })
+                    });
+                    if (!res.ok) throw new Error("Ollama API Error: " + res.status);
+                    const data = await res.json();
+                    textResponse = data.response || "No response.";
+                }
+                else if (provider === "groq") {
+                    const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+                        method: "POST",
+                        headers: { 
+                            "Content-Type": "application/json",
+                            "Authorization": "Bearer " + apiKey 
+                        },
+                        body: JSON.stringify({
+                            model: "llama3-8b-8192",
+                            messages: [{ role: "user", content: prompt }]
+                        })
+                    });
+                    if (!res.ok) throw new Error("Groq API Error: " + res.status);
+                    const data = await res.json();
+                    textResponse = data.choices?.[0]?.message?.content || "No response.";
+                }
+                else if (provider === "together") {
+                    const res = await fetch("https://api.together.xyz/v1/chat/completions", {
+                        method: "POST",
+                        headers: { 
+                            "Content-Type": "application/json",
+                            "Authorization": "Bearer " + apiKey 
+                        },
+                        body: JSON.stringify({
+                            model: "meta-llama/Llama-3-8b-chat-hf",
+                            messages: [{ role: "user", content: prompt }]
+                        })
+                    });
+                    if (!res.ok) throw new Error("Together API Error: " + res.status);
+                    const data = await res.json();
+                    textResponse = data.choices?.[0]?.message?.content || "No response.";
+                }
+                else if (provider === "cohere") {
+                    const res = await fetch("https://api.cohere.ai/v1/generate", {
+                        method: "POST",
+                        headers: { 
+                            "Content-Type": "application/json",
+                            "Authorization": "Bearer " + apiKey 
+                        },
+                        body: JSON.stringify({
+                            model: "command",
+                            prompt: prompt,
+                            max_tokens: 1024
+                        })
+                    });
+                    if (!res.ok) throw new Error("Cohere API Error: " + res.status);
+                    const data = await res.json();
+                    textResponse = data.generations?.[0]?.text || "No response.";
+                }
+
                 
                 content.innerHTML = textResponse.replace(/\n/g, "<br>").replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>").replace(/\*(.*?)\*/g, "<em>$1</em>").replace(/\`(.*?)\`/g, "<code class='text-purple-300'>$1</code>");
             } catch (err) {
